@@ -41,3 +41,8 @@ changelog:
       - "^docs:"
       - "^test:"
       - "^chore:"
+
+release:
+  draft: true
+  mode: append
+  replace_existing_draft: true
