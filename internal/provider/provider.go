@@ -6,6 +6,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/scicore-unibas-ch/terraform-provider-apisix/internal/apisix"
+	"github.com/scicore-unibas-ch/terraform-provider-apisix/internal/resources"
 )
 
 func Provider() *schema.Provider {
@@ -31,7 +32,9 @@ func Provider() *schema.Provider {
 				Description: "HTTP client timeout in seconds. Defaults to 30.",
 			},
 		},
-		ResourcesMap:         map[string]*schema.Resource{},
+		ResourcesMap: map[string]*schema.Resource{
+			"apisix_upstream": resources.ResourceApisixUpstream(),
+		},
 		ConfigureContextFunc: providerConfigure,
 	}
 }
