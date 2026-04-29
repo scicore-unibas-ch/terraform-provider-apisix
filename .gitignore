@@ -36,5 +36,4 @@ terraform-provider-apisix
 Thumbs.db
 
 # Go
-go.sum
 vendor/
