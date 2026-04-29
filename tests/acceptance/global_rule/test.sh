@@ -44,6 +44,10 @@ log_info "Initializing Terraform..."
 log_info "Cleaning up any existing state..."
 tofu destroy -auto-approve -lock=false 2>/dev/null || true
 
+# Clean up any existing state from previous runs
+log_info "Cleaning up any existing state..."
+tofu destroy -auto-approve -lock=false 2>/dev/null || true
+
 # Test 1: Create all global rules
 log_info "Test 1: Create global rules (basic, multi_plugins, ip_restriction, route_integration)"
 echo "Executing: tofu apply -auto-approve -lock=false"

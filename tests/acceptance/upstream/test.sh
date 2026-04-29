@@ -43,6 +43,10 @@ log_info "Initializing Terraform..."
 # echo "Executing: tofu init -input=false"
 # tofu init -input=false
 
+# Clean up any existing state from previous runs
+log_info "Cleaning up any existing state..."
+tofu destroy -auto-approve -lock=false 2>/dev/null || true
+
 # Test 1: Create all upstreams
 log_info "Test 1: Create upstreams (basic, medium, complex)"
 echo "Executing: tofu apply -auto-approve -lock=false"
