@@ -66,7 +66,7 @@ rm -f .terraform.lock.hcl 2>/dev/null || true
 # Restart APISIX for clean state
 log_info "Restarting APISIX cluster for clean state..."
 cd ../../
-docker compose down -v >/dev/null 2>&1 || true
+docker compose down --volumes --remove-orphans >/dev/null 2>&1 || true
 docker compose up -d >/dev/null 2>&1
 sleep 8
 cd - >/dev/null
