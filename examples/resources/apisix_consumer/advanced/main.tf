@@ -57,8 +57,8 @@ resource "apisix_consumer" "hmac_user" {
 
   plugins = {
     "hmac-auth" = jsonencode({
-      key            = "hmac-user-key"
-      secret         = "hmac-secret-key-12345678"
+      key_id         = "hmac-user-key"
+      secret_key     = "hmac-secret-key-12345678"
       algorithm      = "hmac-sha512"
       clock_skew     = 300
       keep_headers   = "false"
@@ -69,6 +69,44 @@ resource "apisix_consumer" "hmac_user" {
   labels = {
     env        = "production"
     auth-type  = "hmac"
+    managed-by = "terraform"
+  }
+}
+
+# Consumer in a consumer group
+resource "apisix_consumer_group" "example_group" {
+  group_id = "example-consumer-group"
+  name     = "Example Consumer Group"
+  desc     = "Consumer group for example users"
+
+  plugins = {
+    "limit-count" = jsonencode({
+      count         = 1000
+      time_window   = 60
+      rejected_code = 429
+    })
+  }
+
+  labels = {
+    env        = "production"
+    managed-by = "terraform"
+  }
+}
+
+resource "apisix_consumer" "grouped_user" {
+  username = "grouped-user"
+  desc     = "User in a consumer group"
+  group_id = apisix_consumer_group.example_group.group_id
+
+  plugins = {
+    "key-auth" = jsonencode({
+      key = "grouped-user-key"
+    })
+  }
+
+  labels = {
+    env        = "production"
+    user-type  = "grouped"
     managed-by = "terraform"
   }
 }

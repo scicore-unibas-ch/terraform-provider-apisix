@@ -84,3 +84,50 @@ resource "apisix_route" "with_vars" {
   priority = 10
   status   = 1
 }
+
+# Route with all fields (comprehensive test)
+resource "apisix_route" "complete" {
+  name        = "test-route-complete"
+  desc        = "Complete route with all supported fields"
+  uris        = ["/complete/*"]
+  hosts       = ["complete.example.com"]
+  remote_addrs = ["10.0.0.0/8"]
+  methods     = ["GET", "POST", "PUT"]
+  priority    = 100
+  status      = 1
+
+  # Using inline upstream instead of upstream_id
+  upstream {
+    type = "roundrobin"
+
+    nodes {
+      host   = "127.0.0.1"
+      port   = 8080
+      weight = 100
+    }
+  }
+
+  # Plugin configuration
+  plugins = {
+    "limit-count" = jsonencode({
+      count         = 500
+      time_window   = 60
+      rejected_code = 429
+    })
+  }
+
+  # Timeout configuration
+  timeout {
+    connect = 5
+    send    = 10
+    read    = 15
+  }
+
+  enable_websocket = true
+
+  labels = {
+    env        = "test"
+    complexity = "complete"
+    managed-by = "terraform"
+  }
+}

@@ -41,12 +41,12 @@ echo "Executing: tofu init -input=false"
 tofu init -input=false
 
 # Test 1: Create all routes
-log_info "Test 1: Create routes (basic, advanced, with_vars)"
+log_info "Test 1: Create routes (basic, advanced, with_vars, complete)"
 echo "Executing: tofu apply -auto-approve -lock=false"
 tofu apply -auto-approve -lock=false
 
 # Verify all routes were created
-for resource in basic advanced with_vars; do
+for resource in basic advanced with_vars complete; do
     ROUTE_ID=$(tofu state show apisix_route.$resource 2>&1 | grep '^\s*id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
     if [ -z "$ROUTE_ID" ]; then
         log_error "Failed to get route ID for $resource"
@@ -99,13 +99,40 @@ STATUS=$(echo "$RESPONSE" | jq -r '.value.status')
 [ "$STATUS" = "1" ] || { log_error "Advanced route status mismatch: got $STATUS"; exit 1; }
 log_info "✓ Route configurations verified"
 
+# Test 3b: Verify complete route configuration
+log_info "Test 3b: Verify complete route configuration"
+COMPLETE_ID=$(tofu state show apisix_route.complete 2>/dev/null | grep '^\s*id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
+RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/routes/$COMPLETE_ID" -H "X-API-KEY: test123456789")
+
+# Verify desc field
+DESC=$(echo "$RESPONSE" | jq -r '.value.desc')
+[ "$DESC" = "Complete route with all supported fields" ] || { log_error "Complete route desc mismatch: got $DESC"; exit 1; }
+
+# Verify remote_addrs field
+REMOTE_ADDRS=$(echo "$RESPONSE" | jq -r '.value.remote_addrs | length')
+[ "$REMOTE_ADDRS" = "1" ] || { log_error "Complete route remote_addrs mismatch: got $REMOTE_ADDRS"; exit 1; }
+
+# Verify enable_websocket field
+WEBSOCKET=$(echo "$RESPONSE" | jq -r '.value.enable_websocket')
+[ "$WEBSOCKET" = "true" ] || { log_error "Complete route websocket mismatch: got $WEBSOCKET"; exit 1; }
+
+# Verify timeout fields
+TIMEOUT_CONNECT=$(echo "$RESPONSE" | jq -r '.value.timeout.connect')
+TIMEOUT_SEND=$(echo "$RESPONSE" | jq -r '.value.timeout.send')
+TIMEOUT_READ=$(echo "$RESPONSE" | jq -r '.value.timeout.read')
+[ "$TIMEOUT_CONNECT" = "5" ] || { log_error "Complete route timeout.connect mismatch: got $TIMEOUT_CONNECT"; exit 1; }
+[ "$TIMEOUT_SEND" = "10" ] || { log_error "Complete route timeout.send mismatch: got $TIMEOUT_SEND"; exit 1; }
+[ "$TIMEOUT_READ" = "15" ] || { log_error "Complete route timeout.read mismatch: got $TIMEOUT_READ"; exit 1; }
+
+log_info "✓ Complete route configuration verified"
+
 # Test 4: Destroy all routes
 log_info "Test 4: Destroy routes"
 echo "Executing: tofu destroy -auto-approve -lock=false"
 tofu destroy -auto-approve -lock=false
 
 # Verify all routes were deleted
-for resource in basic advanced with_vars; do
+for resource in basic advanced with_vars complete; do
     ROUTE_ID=$(tofu state show apisix_route.$resource 2>/dev/null | grep "^ *id *" | cut -d'"' -f2 || echo "")
     if [ -n "$ROUTE_ID" ]; then
         RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/routes/$ROUTE_ID" \
@@ -123,7 +150,7 @@ log_info "Test 5: Recreate routes"
 echo "Executing: tofu apply -auto-approve -lock=false"
 tofu apply -auto-approve -lock=false
 
-for resource in basic advanced with_vars; do
+for resource in basic advanced with_vars complete; do
     ROUTE_ID=$(tofu state show apisix_route.$resource 2>/dev/null | grep "^ *id *" | cut -d'"' -f2)
     if [ -z "$ROUTE_ID" ]; then
         log_error "Failed to get route ID for $resource after recreation"
@@ -134,7 +161,7 @@ log_info "✓ All routes recreated successfully"
 
 # Test 6: Import test for all routes
 log_info "Test 6: Import test"
-for resource in basic advanced with_vars; do
+for resource in basic advanced with_vars complete; do
     ROUTE_ID=$(tofu state show apisix_route.$resource 2>/dev/null | grep '^\s*id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
     
     # Remove from state

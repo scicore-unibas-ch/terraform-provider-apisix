@@ -70,3 +70,28 @@ resource "apisix_service" "advanced" {
     managed-by = "terraform"
   }
 }
+
+# Service with custom Lua script (alternative to plugins)
+resource "apisix_service" "with_script" {
+  name = "service-with-script"
+  desc = "Service with custom Lua script instead of plugins"
+
+  # Script must be a valid Lua module string
+  # Note: Conflicts with `plugins` field - use one or the other
+  script = <<-EOT
+local _M = {}
+function _M.access(conf, ctx)
+    ngx.header["X-Custom-Header"] = "CustomValue"
+    ngx.header["X-Request-ID"] = ngx.request_id()
+end
+return _M
+EOT
+
+  upstream_id = apisix_upstream.backend.id
+
+  labels = {
+    env        = "production"
+    auth-type  = "custom"
+    managed-by = "terraform"
+  }
+}
