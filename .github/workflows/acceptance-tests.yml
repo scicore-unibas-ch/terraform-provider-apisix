@@ -29,35 +29,25 @@ jobs:
 
       - uses: opentofu/setup-opentofu@v2
 
-      # -----------------------------------------------------------------------
-      # Start the APISIX cluster from pre-built Docker images
-      # -----------------------------------------------------------------------
-      - name: Start APISIX cluster (initial)
+      # Start APISIX cluster ONCE for all tests
+      - name: Start APISIX cluster
         working-directory: tests/
         run: |
           docker compose up -d
-          sleep 10
-
-      - name: Wait for APISIX to be ready
-        run: |
-          echo "Waiting for APISIX Admin API..."
+          echo "Waiting for APISIX to be ready..."
           for i in $(seq 1 60); do
             if curl -sf http://localhost:9180/apisix/admin/routes -H "X-API-KEY: test123456789" &>/dev/null; then
-              echo "APISIX ready."
+              echo "✓ APISIX ready"
               break
             fi
-            echo "  attempt $i/60 — sleeping 5s"
-            sleep 5
+            sleep 2
           done
 
-      # -----------------------------------------------------------------------
-      # Build the provider and run acceptance tests
-      # -----------------------------------------------------------------------
+      # Build provider
       - name: Build provider binary
         run: go build -o terraform-provider-apisix .
 
-      # Run acceptance tests for each resource
-      # Each test creates its own .tofurc and restarts APISIX for clean state
+      # Run each acceptance test
       - name: Run upstream acceptance tests
         working-directory: tests/acceptance/upstream
         run: ./test.sh
@@ -86,12 +76,9 @@ jobs:
         working-directory: tests/acceptance/global_rule
         run: ./test.sh
 
-      # SSL tests are skipped due to SSL proxy configuration complexity
-      # They can be enabled later when needed
+      # SSL tests skipped - documented in README
 
-      # -----------------------------------------------------------------------
-      # Cleanup
-      # -----------------------------------------------------------------------
+      # Cleanup ONCE after all tests
       - name: Stop APISIX cluster
         if: always()
         working-directory: tests/
