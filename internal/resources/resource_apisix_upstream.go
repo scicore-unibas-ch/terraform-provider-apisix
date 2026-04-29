@@ -519,23 +519,18 @@ func flattenUpstream(d *schema.ResourceData, value interface{}) diag.Diagnostics
 	d.Set("retries", data["retries"])
 	d.Set("retry_timeout", data["retry_timeout"])
 
-	// Set labels
-	labelsRaw := data["labels"]
-	if labelsRaw != nil {
+	// Set labels - always set to handle Computed: true
+	labels := make(map[string]string)
+	if labelsRaw, ok := data["labels"]; ok && labelsRaw != nil {
 		if labelsMap, ok := labelsRaw.(map[string]interface{}); ok {
-			labels := make(map[string]string)
 			for k, v := range labelsMap {
 				if str, ok := v.(string); ok {
 					labels[k] = str
 				}
 			}
-			if len(labels) > 0 {
-				if err := d.Set("labels", labels); err != nil {
-					return diag.Errorf("error setting labels: %s", err)
-				}
-			}
 		}
 	}
+	d.Set("labels", labels)
 
 	if nodes, ok := data["nodes"].([]interface{}); ok {
 		d.Set("nodes", flattenNodes(nodes))

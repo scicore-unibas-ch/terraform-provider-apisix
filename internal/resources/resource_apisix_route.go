@@ -488,19 +488,18 @@ func flattenRoute(d *schema.ResourceData, value interface{}) diag.Diagnostics {
 		d.Set("upstream", []interface{}{upstream})
 	}
 
+	// Set labels - always set to handle Computed: true
+	labels := make(map[string]string)
 	if labelsRaw, ok := data["labels"]; ok && labelsRaw != nil {
 		if labelsMap, ok := labelsRaw.(map[string]interface{}); ok {
-			labels := make(map[string]string)
 			for k, v := range labelsMap {
 				if str, ok := v.(string); ok {
 					labels[k] = str
 				}
 			}
-			if len(labels) > 0 {
-				d.Set("labels", labels)
-			}
 		}
 	}
+	d.Set("labels", labels)
 
 	if timeout, ok := data["timeout"]; ok {
 		d.Set("timeout", []interface{}{timeout})
