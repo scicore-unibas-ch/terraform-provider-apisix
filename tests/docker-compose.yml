@@ -19,6 +19,7 @@ services:
       - APISIX_STAND_ALONE=false
     volumes:
       - ./apisix/config.yaml:/usr/local/apisix/conf/config.yaml:ro
+      - ./apisix/ssl:/etc/apisix/ssl:ro
     ports:
       - "9180:9180"  # Admin API
       - "9080:9080"  # HTTP

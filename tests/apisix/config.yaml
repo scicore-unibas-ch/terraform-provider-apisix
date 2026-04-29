@@ -15,3 +15,10 @@ deployment:
       - "http://etcd:2379"
     prefix: "/apisix"
     timeout: 30
+
+apisix:
+  enable_http2: true
+  ssl:
+    enable: true
+    listen:
+      - port: 9443
