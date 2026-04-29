@@ -29,7 +29,8 @@ cleanup() {
         log_info "Cleaning up..."
         tofu destroy -auto-approve -lock=false 2>/dev/null || true
         # Remove temporary config
-        rm -f .tofurc 2>/dev/null || true
+        rm -f .tofurc terraform.tfstate* terraform.tfstate.backup 2>/dev/null || true
+        rm -rf .terraform* 2>/dev/null || true
     else
         log_warn "Leaving resources for debugging (set CLEANUP_ON_FAILURE=true to auto-cleanup)"
     fi

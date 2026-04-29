@@ -37,3 +37,9 @@ Thumbs.db
 
 # Go
 vendor/
+
+# Test artifacts
+tests/acceptance/*/.tofurc
+tests/acceptance/*/terraform.tfstate*
+tests/acceptance/*/.terraform*
+tests/acceptance/*/.terraform.lock.hcl
