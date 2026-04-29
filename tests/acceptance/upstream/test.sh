@@ -2,7 +2,7 @@
 set -e
 
 # Configuration
-CLEANUP_ON_FAILURE=${CLEANUP_ON_FAILURE:-false}
+CLEANUP_ON_FAILURE=${CLEANUP_ON_FAILURE:-true}
 TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$TEST_DIR"
 
@@ -40,10 +40,12 @@ trap cleanup EXIT
 
 # Initialize
 log_info "Initializing Terraform..."
+echo "Executing: tofu init -input=false"
 tofu init -input=false
 
 # Test 1: Create all upstreams
 log_info "Test 1: Create upstreams (basic, medium, complex)"
+echo "Executing: tofu apply -auto-approve -lock=false"
 tofu apply -auto-approve -lock=false
 
 # Verify all upstreams were created
@@ -69,6 +71,7 @@ log_info "✓ All upstreams verified in APISIX API"
 
 # Test 2: Verify idempotency (should be no changes)
 log_info "Test 2: Verify idempotency"
+echo "Executing: tofu plan -detailed-exitcode -lock=false"
 set +e
 PLAN_OUTPUT=$(tofu plan -detailed-exitcode -lock=false 2>&1)
 EXIT_CODE=$?
@@ -84,6 +87,7 @@ fi
 
 # Test 3: Verify specific fields in complex upstream
 log_info "Test 3: Verify complex upstream configuration"
+echo "Executing: curl -s http://localhost:9180/apisix/admin/upstreams/<id>"
 COMPLEX_ID=$(tofu state show apisix_upstream.complex 2>/dev/null | grep '^\s*id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
 RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/upstreams/$COMPLEX_ID" -H "X-API-KEY: test123456789")
 
@@ -101,6 +105,7 @@ log_info "✓ Complex upstream configuration verified"
 
 # Test 4: Destroy all upstreams
 log_info "Test 4: Destroy upstreams"
+echo "Executing: tofu destroy -auto-approve -lock=false"
 tofu destroy -auto-approve -lock=false
 
 # Verify all upstreams were deleted
@@ -119,6 +124,7 @@ log_info "✓ All upstreams deleted successfully"
 
 # Test 5: Recreate all upstreams
 log_info "Test 5: Recreate upstreams"
+echo "Executing: tofu apply -auto-approve -lock=false"
 tofu apply -auto-approve -lock=false
 
 for resource in basic medium complex; do
@@ -136,12 +142,15 @@ for resource in basic medium complex; do
     UPSTREAM_ID=$(tofu state show apisix_upstream.$resource 2>/dev/null | grep '^\s*id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
     
     # Remove from state
+    echo "Executing: tofu state rm apisix_upstream.$resource"
     tofu state rm apisix_upstream.$resource
     
     # Import back
+    echo "Executing: tofu import apisix_upstream.$resource $UPSTREAM_ID"
     tofu import apisix_upstream.$resource "$UPSTREAM_ID"
     
     # Verify import worked (no changes after import)
+    echo "Executing: tofu plan -detailed-exitcode -out=/dev/null -lock=false"
     set +e
     tofu plan -detailed-exitcode -out=/dev/null -lock=false 2>&1 | grep -q "No changes"
     EXIT_CODE=$?
@@ -152,11 +161,22 @@ for resource in basic medium complex; do
         tofu plan -lock=false | head -30
         exit 1
     fi
-    log_info "✓ Import successful for $resource"
+    
+    # Additional verification: run tofu apply to ensure no changes
+    echo "Executing: tofu apply -auto-approve -lock=false (verify no changes after import)"
+    APPLY_OUTPUT=$(tofu apply -auto-approve -lock=false 2>&1)
+    if echo "$APPLY_OUTPUT" | grep -q "Resources: 0 added, 0 changed, 0 destroyed"; then
+        log_info "✓ Import successful for $resource (verified with apply)"
+    else
+        log_error "Import verification failed for $resource - apply detected changes"
+        echo "$APPLY_OUTPUT"
+        exit 1
+    fi
 done
 
 # Final cleanup
 log_info "Cleanup"
+echo "Executing: tofu destroy -auto-approve -lock=false"
 tofu destroy -auto-approve -lock=false
 
 log_info "✓ All acceptance tests passed!"
