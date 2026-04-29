@@ -39,10 +39,11 @@ trap cleanup EXIT
 
 # Generate temporary .tofurc for this test
 log_info "Generating temporary provider config..."
+PROVIDER_DIR="$(cd "$TEST_DIR/../../.." && pwd)"
 cat > "$TEST_DIR/.tofurc" << TOFURC
 provider_installation {
   dev_overrides {
-    "scicore-unibas-ch/apisix" = "/home/escobar/github/terraform-provider-apisix"
+    "scicore-unibas-ch/apisix" = "$PROVIDER_DIR"
   }
   direct {}
 }
