@@ -6,29 +6,6 @@ CLEANUP_ON_FAILURE=${CLEANUP_ON_FAILURE:-true}
 TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$TEST_DIR"
 
-# Generate temporary .tofurc for this test
-log_info "Generating temporary provider config..."
-cat > .tofurc << TOFURC
-provider_installation {
-  dev_overrides {
-    "scicore-unibas-ch/apisix" = "/home/escobar/github/terraform-provider-apisix"
-  }
-  direct {}
-}
-TOFURC
-export TF_CLI_CONFIG_FILE="$TEST_DIR/.tofurc"
-
-# Generate temporary .tofurc for this test
-log_info "Generating temporary provider config..."
-cat > .tofurc << TOFURC
-provider_installation {
-  dev_overrides {
-    "scicore-unibas-ch/apisix" = "/home/escobar/github/terraform-provider-apisix"
-  }
-  direct {}
-}
-TOFURC
-export TF_CLI_CONFIG_FILE="$TEST_DIR/.tofurc"
 
 # Colors for output
 RED='\033[0;31m'
@@ -59,6 +36,19 @@ cleanup() {
 }
 
 trap cleanup EXIT
+
+# Generate temporary .tofurc for this test
+log_info "Generating temporary provider config..."
+cat > .tofurc << TOFURC
+provider_installation {
+  dev_overrides {
+    "scicore-unibas-ch/apisix" = "/home/escobar/github/terraform-provider-apisix"
+  }
+  direct {}
+}
+TOFURC
+export TF_CLI_CONFIG_FILE="$TEST_DIR/.tofurc"
+
 
 # Initialize
 log_info "Initializing Terraform..."

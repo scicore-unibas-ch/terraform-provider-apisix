@@ -42,12 +42,14 @@ log_info "Generating temporary provider config..."
 cat > .tofurc << TOFURC
 provider_installation {
   dev_overrides {
-    "scicore-unibas-ch/apisix" = "$(cd /home/escobar/github/terraform-provider-apisix && pwd)"
+    "scicore-unibas-ch/apisix" = "/home/escobar/github/terraform-provider-apisix"
   }
   direct {}
 }
 TOFURC
 export TF_CLI_CONFIG_FILE="$TEST_DIR/.tofurc"
+
+
 
 # Initialize
 log_info "Initializing Terraform..."
