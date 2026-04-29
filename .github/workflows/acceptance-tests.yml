@@ -37,17 +37,31 @@ jobs:
         run: |
           docker compose up -d
 
+      - name: Wait for etcd to be ready
+        run: |
+          echo "Waiting for etcd..."
+          for i in $(seq 1 30); do
+            if docker exec tests-etcd-1 etcdctl endpoint health &>/dev/null; then
+              echo "etcd ready."
+              break
+            fi
+            echo "  attempt $i/30 — sleeping 5s"
+            sleep 5
+          done
+
       - name: Wait for APISIX to be ready
         run: |
           echo "Waiting for APISIX Admin API..."
-          for i in $(seq 1 36); do
-            if curl -sf http://localhost:9180/apisix/admin/routes &>/dev/null; then
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:9180/apisix/admin/routes -H "X-API-KEY: test123456789" &>/dev/null; then
               echo "APISIX ready."
               break
             fi
-            echo "  attempt $i/36 — sleeping 5s"
+            echo "  attempt $i/60 — sleeping 5s"
             sleep 5
           done
+          # Final verification
+          curl -s http://localhost:9180/apisix/admin/routes -H "X-API-KEY: test123456789" | jq -r '.total // empty' || echo "Warning: APISIX may not be fully ready"
 
       - name: Print APISIX version
         run: |
