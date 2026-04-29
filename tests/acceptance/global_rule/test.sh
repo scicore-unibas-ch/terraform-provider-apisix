@@ -27,17 +27,11 @@ log_warn() {
 cleanup() {
     if [ "$CLEANUP_ON_FAILURE" = "true" ] || [ $? -eq 0 ]; then
         log_info "Cleaning up..."
-        tofu destroy -auto-approve -lock=false 2>/dev/null || true
-        # Force API cleanup for all resources
-        for id in test-gr-basic test-gr-ip test-gr-multi test-gr-route; do
-            curl -s -X DELETE "http://localhost:9180/apisix/admin/global_rules/$id" \
-                -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true
-        done
-        curl -s -X DELETE "http://localhost:9180/apisix/admin/routes/test-route-with-gr" \
-            -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true
-        curl -s -X DELETE "http://localhost:9180/apisix/admin/upstreams/test-gr-upstream" \
-            -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true
-    else
+        tofu destroy -auto-approve -lock=false 2>/dev/null ||        # Force API cleanup for all resources
+        for id in test-gr-basic test-gr-ip test-gr-multi test-gr-route; do "http://localhost:9180/apisix/admin/global_rules/$id" \
+                -H "X-API-KEY: test123456789" > /dev/null 2>&1 ||        done "http://localhost:9180/apisix/admin/routes/test-route-with-gr" \
+            -H "X-API-KEY: test123456789" > /dev/null 2>&1 ||        curl -s -X DELETE "http://localhost:9180/apisix/admin/upstreams/test-gr-upstream" \
+            -H "X-API-KEY: test123456789" > /dev/null 2>&1 ||    else
         log_warn "Leaving resources for debugging (set CLEANUP_ON_FAILURE=true to auto-cleanup)"
     fi
 }
@@ -49,17 +43,24 @@ log_info "Initializing Terraform..."
 # echo "Executing: tofu init -input=false"
 # tofu init -input=false
 
-# Initial cleanup - state and API
-log_info "Initial cleanup..."
-tofu destroy -auto-approve -lock=false 2>/dev/null || true
-for id in test-gr-basic test-gr-ip test-gr-multi test-gr-route; do
-    curl -s -X DELETE "http://localhost:9180/apisix/admin/global_rules/$id" \
-        -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true
+# Restart APISIX for clean state
+log_info "Restarting APISIX cluster for clean state..."
+cd ../../
+docker compose down -v >/dev/null 2>&1 || true
+docker compose up -d >/dev/null 2>&1
+sleep 8
+cd - >/dev/null
+
+# Wait for APISIX to be ready
+log_info "Waiting for APISIX to be ready..."
+for i in {1..60}; do
+    if curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/" \
+        -H "X-API-KEY: test123456789" | grep -q "200"; then
+        log_info "APISIX is ready"
+        break
+    fi
+    sleep 1
 done
-curl -s -X DELETE "http://localhost:9180/apisix/admin/routes/test-route-with-gr" \
-    -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true
-curl -s -X DELETE "http://localhost:9180/apisix/admin/upstreams/test-gr-upstream" \
-    -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true
 
 # Test 1: Create all global rules
 log_info "Test 1: Create global rules (basic, multi_plugins, ip_restriction, route_integration)"

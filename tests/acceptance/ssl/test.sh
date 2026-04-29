@@ -27,8 +27,7 @@ log_warn() {
 cleanup() {
     if [ "$CLEANUP_ON_FAILURE" = "true" ] || [ $? -eq 0 ]; then
         log_info "Cleaning up..."
-        tofu destroy -auto-approve -lock=false 2>/dev/null || true
-        for id in example.com labeled.example.com secure.example.com; do curl -s -X DELETE "http://localhost:9180/apisix/admin/ssls/$id" -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true; done
+        tofu destroy -auto-approve -lock=false 2>/dev/null ||        for id in example.com labeled.example.com secure.example.com; do curl -s -X DELETE "http://localhost:9180/apisix/admin/ssls/$id" -H "X-API-KEY: test123456789" > /dev/null 2>&1 ||; done
     else
         log_warn "Leaving resources for debugging (set CLEANUP_ON_FAILURE=true to auto-cleanup)"
     fi
@@ -41,7 +40,7 @@ log_info "Checking if APISIX SSL proxy is enabled (port 9443)..."
 if ! curl -k -s -o /dev/null -w "%{http_code}" "https://localhost:9443" --connect-timeout 5 2>/dev/null | grep -q "404\|400"; then
     log_error "APISIX SSL proxy is not enabled on port 9443"
     log_error "Please ensure:"
-    log_error "  1. tests/apisix/config.yaml has 'apisix.ssl.enable: true'"
+    log_error "  1. tests/apisix/config.yaml has 'apisix.ssl.enable:'"
     log_error "  2. tests/docker-compose.yml exposes port 9443"
     log_error "  3. Docker containers are restarted: docker-compose down && docker-compose up -d"
     exit 1
@@ -53,11 +52,24 @@ log_info "Initializing Terraform..."
 # echo "Executing: tofu init -input=false"
 # tofu init -input=false
 
-# Initial cleanup
-log_info "Cleaning up any existing state and APISIX resources..."
-tofu destroy -auto-approve -lock=false 2>/dev/null || true
-    for id in example.com labeled.example.com secure.example.com; do curl -s -X DELETE "http://localhost:9180/apisix/admin/ssls/$id" -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true; done
+# Restart APISIX for clean state
+log_info "Restarting APISIX cluster for clean state..."
+cd ../../
+docker compose down -v >/dev/null 2>&1 || true
+docker compose up -d >/dev/null 2>&1
+sleep 8
+cd - >/dev/null
 
+# Wait for APISIX to be ready
+log_info "Waiting for APISIX to be ready..."
+for i in {1..60}; do
+    if curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/" \
+        -H "X-API-KEY: test123456789" | grep -q "200"; then
+        log_info "APISIX is ready"
+        break
+    fi
+    sleep 1
+done
 
 # Test 1: Create all SSL certificates
 log_info "Test 1: Create SSL certificates (basic, multi_sni, tls13, with_labels)"
