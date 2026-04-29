@@ -91,7 +91,7 @@ git push origin v0.1.0
 - Click "Publish"
 - Enter: `github.com/scicore-unibas-ch/terraform-provider-apisix`
 - Verify ownership
-- Provider will be available at: `registry.opentofu.org/scicore/apisix`
+- Provider will be available at: `registry.opentofu.org/scicore-unibas-ch/apisix`
 
 ## Test Coverage Summary
 

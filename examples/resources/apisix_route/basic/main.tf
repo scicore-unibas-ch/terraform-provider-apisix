@@ -6,7 +6,7 @@ This example creates a simple route with minimal configuration.
 terraform {
   required_providers {
     apisix = {
-      source = "scicore/apisix"
+      source = "scicore-unibas-ch/apisix"
     }
   }
 }

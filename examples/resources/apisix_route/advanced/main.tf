@@ -6,7 +6,7 @@ This example demonstrates a complete route configuration with all supported fiel
 terraform {
   required_providers {
     apisix = {
-      source = "scicore/apisix"
+      source = "scicore-unibas-ch/apisix"
     }
   }
 }

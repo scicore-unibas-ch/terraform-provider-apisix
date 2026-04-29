@@ -238,7 +238,7 @@
 make build
 
 # Install for local testing
-cp terraform-provider-apisix ~/.tofu.d/plugins/registry.opentofu.org/scicore/apisix/0.1.0/linux_amd64/
+cp terraform-provider-apisix ~/.tofu.d/plugins/registry.opentofu.org/scicore-unibas-ch/apisix/0.1.0/linux_amd64/
 
 # Run all unit tests
 go test ./internal/resources/... -v

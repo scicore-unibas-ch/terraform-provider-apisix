@@ -78,7 +78,7 @@ jobs:
           cat > /tmp/dev.tofurc <<EOF
           provider_installation {
             dev_overrides {
-              "scicore/apisix" = "/tmp"
+              "scicore-unibas-ch/apisix" = "/tmp"
             }
             direct {}
           }

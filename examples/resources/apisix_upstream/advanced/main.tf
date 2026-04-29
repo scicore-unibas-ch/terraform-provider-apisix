@@ -6,7 +6,7 @@ This example demonstrates a complete upstream configuration with all supported f
 terraform {
   required_providers {
     apisix = {
-      source = "scicore/apisix"
+      source = "scicore-unibas-ch/apisix"
     }
   }
 }
