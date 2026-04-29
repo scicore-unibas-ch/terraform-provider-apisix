@@ -131,3 +131,24 @@ resource "apisix_route" "complete" {
     managed-by = "terraform"
   }
 }
+
+# Route with custom Lua script (alternative to plugins)
+resource "apisix_route" "with_script" {
+  name = "test-route-with-script"
+  desc = "Route with custom Lua script"
+  uri  = "/script/*"
+
+  # Script must be a valid Lua module string
+  # Note: Conflicts with `plugins` field - use one or the other
+  script = <<-EOT
+local _M = {}
+function _M.access(conf, ctx)
+    ngx.header["X-Custom-Route"] = "ScriptRoute"
+    ngx.header["X-Request-ID"] = ngx.request_id()
+end
+return _M
+EOT
+
+  upstream_id = apisix_upstream.route_test.id
+  status      = 1
+}

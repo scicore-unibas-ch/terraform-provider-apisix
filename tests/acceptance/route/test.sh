@@ -41,12 +41,12 @@ echo "Executing: tofu init -input=false"
 tofu init -input=false
 
 # Test 1: Create all routes
-log_info "Test 1: Create routes (basic, advanced, with_vars, complete)"
+log_info "Test 1: Create routes (basic, advanced, with_vars, complete, with_script)"
 echo "Executing: tofu apply -auto-approve -lock=false"
 tofu apply -auto-approve -lock=false
 
 # Verify all routes were created
-for resource in basic advanced with_vars complete; do
+for resource in basic advanced with_vars complete with_script; do
     ROUTE_ID=$(tofu state show apisix_route.$resource 2>&1 | grep '^\s*id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
     if [ -z "$ROUTE_ID" ]; then
         log_error "Failed to get route ID for $resource"
@@ -126,13 +126,24 @@ TIMEOUT_READ=$(echo "$RESPONSE" | jq -r '.value.timeout.read')
 
 log_info "✓ Complete route configuration verified"
 
+# Test 3c: Verify route with script
+log_info "Test 3c: Verify route with script configuration"
+WITH_SCRIPT_ID=$(tofu state show apisix_route.with_script 2>/dev/null | grep '^\s*id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
+RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/routes/$WITH_SCRIPT_ID" -H "X-API-KEY: test123456789")
+SCRIPT=$(echo "$RESPONSE" | jq -r '.value.script')
+if [ -z "$SCRIPT" ] || [ "$SCRIPT" = "null" ]; then
+    log_error "with_script route script is empty or null"
+    exit 1
+fi
+log_info "✓ Route with script configuration verified"
+
 # Test 4: Destroy all routes
 log_info "Test 4: Destroy routes"
 echo "Executing: tofu destroy -auto-approve -lock=false"
 tofu destroy -auto-approve -lock=false
 
 # Verify all routes were deleted
-for resource in basic advanced with_vars complete; do
+for resource in basic advanced with_vars complete with_script; do
     ROUTE_ID=$(tofu state show apisix_route.$resource 2>/dev/null | grep "^ *id *" | cut -d'"' -f2 || echo "")
     if [ -n "$ROUTE_ID" ]; then
         RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/routes/$ROUTE_ID" \
@@ -150,7 +161,7 @@ log_info "Test 5: Recreate routes"
 echo "Executing: tofu apply -auto-approve -lock=false"
 tofu apply -auto-approve -lock=false
 
-for resource in basic advanced with_vars complete; do
+for resource in basic advanced with_vars complete with_script; do
     ROUTE_ID=$(tofu state show apisix_route.$resource 2>/dev/null | grep "^ *id *" | cut -d'"' -f2)
     if [ -z "$ROUTE_ID" ]; then
         log_error "Failed to get route ID for $resource after recreation"
@@ -161,7 +172,7 @@ log_info "✓ All routes recreated successfully"
 
 # Test 6: Import test for all routes
 log_info "Test 6: Import test"
-for resource in basic advanced with_vars complete; do
+for resource in basic advanced with_vars complete with_script; do
     ROUTE_ID=$(tofu state show apisix_route.$resource 2>/dev/null | grep '^\s*id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
     
     # Remove from state
