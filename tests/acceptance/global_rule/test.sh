@@ -28,8 +28,7 @@ log_warn() {
 cleanup() {
     if [ "$CLEANUP_ON_FAILURE" = "true" ] || [ $? -eq 0 ]; then
         log_info "Cleaning up..."
-        tofu destroy -auto-approve -lock=false 2>/dev/null || true
-    else
+        tofu destroy -auto-approve -lock=false 2>/dev/null ||    else
         log_warn "Leaving resources for debugging (set CLEANUP_ON_FAILURE=true to auto-cleanup)"
     fi
 }
@@ -57,16 +56,13 @@ log_info "Initializing Terraform..."
 # tofu init -input=false
 
 # Remove lock files for clean test
-rm -f .terraform.lock.hcl 2>/dev/null || true
-
+rm -f .terraform.lock.hcl 2>/dev/null ||
 # Remove lock files for clean test
-rm -f .terraform.lock.hcl 2>/dev/null || true
-
+rm -f .terraform.lock.hcl 2>/dev/null ||
 # Restart APISIX for clean state
 log_info "Restarting APISIX cluster for clean state..."
 cd ../../
-docker compose down -v >/dev/null 2>&1 || true
-docker compose up -d >/dev/null 2>&1
+docker compose down -v >/dev/null 2>&1 ||docker compose up -d >/dev/null 2>&1
 sleep 8
 cd - >/dev/null
 
@@ -82,23 +78,7 @@ done
 
 # Initial cleanup
 log_info "Cleaning up any existing state and APISIX resources..."
-tofu destroy -auto-approve -lock=false 2>/dev/null || true
-
-# Clean up any existing state and APISIX resources from previous runs
-log_info "Cleaning up any existing state..."
-tofu destroy -auto-approve -lock=false 2>/dev/null || true
-
-# Force cleanup via API in case state is out of sync
-log_info "Force cleaning APISIX resources via API..."
-for rule_id in test-gr-basic test-gr-multi test-gr-ip test-gr-route; do
-    curl -s -X DELETE "http://localhost:9180/apisix/admin/global_rules/$rule_id" \
-        -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true
-done
-curl -s -X DELETE "http://localhost:9180/apisix/admin/routes/test-route-with-gr" \
-    -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true
-curl -s -X DELETE "http://localhost:9180/apisix/admin/upstreams/test-gr-upstream" \
-    -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true
-
+tofu destroy -auto-approve -lock=false 2>/dev/null ||
 # Test 1: Create all global rules
 log_info "Test 1: Create global rules (basic, multi_plugins, ip_restriction, route_integration)"
 echo "Executing: tofu apply -auto-approve -lock=false"
