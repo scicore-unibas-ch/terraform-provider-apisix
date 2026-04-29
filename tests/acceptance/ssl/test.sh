@@ -28,6 +28,7 @@ cleanup() {
     if [ "$CLEANUP_ON_FAILURE" = "true" ] || [ $? -eq 0 ]; then
         log_info "Cleaning up..."
         tofu destroy -auto-approve -lock=false 2>/dev/null || true
+        for id in example.com labeled.example.com secure.example.com; do curl -s -X DELETE "http://localhost:9180/apisix/admin/ssls/$id" -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true; done
     else
         log_warn "Leaving resources for debugging (set CLEANUP_ON_FAILURE=true to auto-cleanup)"
     fi
@@ -52,9 +53,11 @@ log_info "Initializing Terraform..."
 # echo "Executing: tofu init -input=false"
 # tofu init -input=false
 
-# Clean up any existing state from previous runs
-log_info "Cleaning up any existing state..."
+# Initial cleanup
+log_info "Cleaning up any existing state and APISIX resources..."
 tofu destroy -auto-approve -lock=false 2>/dev/null || true
+    for id in example.com labeled.example.com secure.example.com; do curl -s -X DELETE "http://localhost:9180/apisix/admin/ssls/$id" -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true; done
+
 
 # Test 1: Create all SSL certificates
 log_info "Test 1: Create SSL certificates (basic, multi_sni, tls13, with_labels)"

@@ -28,6 +28,7 @@ cleanup() {
     if [ "$CLEANUP_ON_FAILURE" = "true" ] || [ $? -eq 0 ]; then
         log_info "Cleaning up..."
         tofu destroy -auto-approve -lock=false 2>/dev/null || true
+        for id in service-test-upstream; do curl -s -X DELETE "http://localhost:9180/apisix/admin/services/$id" -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true; done
     else
         log_warn "Leaving resources for debugging (set CLEANUP_ON_FAILURE=true to auto-cleanup)"
     fi
@@ -40,9 +41,11 @@ log_info "Initializing Terraform..."
 # echo "Executing: tofu init -input=false"
 # tofu init -input=false
 
-# Clean up any existing state from previous runs
-log_info "Cleaning up any existing state..."
+# Initial cleanup
+log_info "Cleaning up any existing state and APISIX resources..."
 tofu destroy -auto-approve -lock=false 2>/dev/null || true
+    for id in service-test-upstream; do curl -s -X DELETE "http://localhost:9180/apisix/admin/services/$id" -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true; done
+
 
 # Test 1: Create all services
 log_info "Test 1: Create services (basic, with_hosts, with_plugins, with_upstream, with_labels, with_script)"
