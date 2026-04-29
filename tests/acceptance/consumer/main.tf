@@ -68,6 +68,32 @@ resource "apisix_consumer" "with_labels" {
   }
 }
 
+# Consumer with group_id (requires consumer group)
+resource "apisix_consumer_group" "test_group" {
+  group_id = "test-consumer-group"
+  desc     = "Test consumer group for consumer testing"
+
+  plugins = {
+    "limit-count" = jsonencode({
+      count         = 100
+      time_window   = 60
+      rejected_code = 429
+    })
+  }
+}
+
+resource "apisix_consumer" "with_group" {
+  username = "test-consumer-with-group"
+  desc     = "Consumer with group_id"
+  group_id = apisix_consumer_group.test_group.group_id
+
+  plugins = {
+    "key-auth" = jsonencode({
+      key = "grouped-consumer-key"
+    })
+  }
+}
+
 # Consumer with multiple auth plugins (hmac-auth)
 resource "apisix_consumer" "hmac_auth" {
   username = "test-consumer-hmac-auth"

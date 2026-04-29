@@ -41,12 +41,12 @@ echo "Executing: tofu init -input=false"
 tofu init -input=false
 
 # Test 1: Create all consumers
-log_info "Test 1: Create consumers (basic, key_auth, jwt_auth, with_labels, hmac_auth)"
+log_info "Test 1: Create consumers (basic, key_auth, jwt_auth, with_labels, hmac_auth, with_group)"
 echo "Executing: tofu apply -auto-approve -lock=false"
 tofu apply -auto-approve -lock=false
 
 # Verify all consumers were created
-for resource in basic key_auth jwt_auth with_labels hmac_auth; do
+for resource in basic key_auth jwt_auth with_labels hmac_auth with_group; do
     CONSUMER_ID=$(tofu state show apisix_consumer.$resource 2>&1 | grep '^\s*username\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
     if [ -z "$CONSUMER_ID" ]; then
         log_error "Failed to get consumer ID for $resource"
@@ -103,6 +103,12 @@ RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/consumers/$WITH_LABELS_ID
 LABELS_COUNT=$(echo "$RESPONSE" | jq -r '.value.labels | keys | length')
 [ "$LABELS_COUNT" = "3" ] || { log_error "with_labels consumer labels mismatch: got $LABELS_COUNT"; exit 1; }
 
+# Verify with_group consumer
+WITH_GROUP_ID=$(tofu state show apisix_consumer.with_group 2>/dev/null | grep '^\s*username\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
+RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/consumers/$WITH_GROUP_ID" -H "X-API-KEY: test123456789")
+GROUP_ID=$(echo "$RESPONSE" | jq -r '.value.group_id')
+[ "$GROUP_ID" = "test-consumer-group" ] || { log_error "with_group consumer group_id mismatch: got $GROUP_ID"; exit 1; }
+
 log_info "✓ Consumer configurations verified"
 
 # Test 4: Destroy all consumers
@@ -111,7 +117,7 @@ echo "Executing: tofu destroy -auto-approve -lock=false"
 tofu destroy -auto-approve -lock=false
 
 # Verify all consumers were deleted
-for resource in basic key_auth jwt_auth with_labels hmac_auth; do
+for resource in basic key_auth jwt_auth with_labels hmac_auth with_group; do
     CONSUMER_ID=$(tofu state show apisix_consumer.$resource 2>/dev/null | grep "^ *username *" | cut -d'"' -f2 || echo "")
     if [ -n "$CONSUMER_ID" ]; then
         RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/consumers/$CONSUMER_ID" \
@@ -129,7 +135,7 @@ log_info "Test 5: Recreate consumers"
 echo "Executing: tofu apply -auto-approve -lock=false"
 tofu apply -auto-approve -lock=false
 
-for resource in basic key_auth jwt_auth with_labels hmac_auth; do
+for resource in basic key_auth jwt_auth with_labels hmac_auth with_group; do
     CONSUMER_ID=$(tofu state show apisix_consumer.$resource 2>/dev/null | grep "^ *username *" | cut -d'"' -f2)
     if [ -z "$CONSUMER_ID" ]; then
         log_error "Failed to get consumer ID for $resource after recreation"
@@ -140,7 +146,7 @@ log_info "✓ All consumers recreated successfully"
 
 # Test 6: Import test for all consumers
 log_info "Test 6: Import test"
-for resource in basic key_auth jwt_auth with_labels hmac_auth; do
+for resource in basic key_auth jwt_auth with_labels hmac_auth with_group; do
     CONSUMER_ID=$(tofu state show apisix_consumer.$resource 2>/dev/null | grep '^\s*username\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
     
     # Remove from state

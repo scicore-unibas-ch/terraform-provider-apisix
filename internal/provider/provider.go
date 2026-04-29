@@ -33,10 +33,11 @@ func Provider() *schema.Provider {
 			},
 		},
 		ResourcesMap: map[string]*schema.Resource{
-			"apisix_upstream": resources.ResourceApisixUpstream(),
-			"apisix_route":    resources.ResourceApisixRoute(),
-			"apisix_service":  resources.ResourceApisixService(),
-			"apisix_consumer": resources.ResourceApisixConsumer(),
+			"apisix_upstream":       resources.ResourceApisixUpstream(),
+			"apisix_route":          resources.ResourceApisixRoute(),
+			"apisix_service":        resources.ResourceApisixService(),
+			"apisix_consumer":       resources.ResourceApisixConsumer(),
+			"apisix_consumer_group": resources.ResourceApisixConsumerGroup(),
 		},
 		ConfigureContextFunc: providerConfigure,
 	}
