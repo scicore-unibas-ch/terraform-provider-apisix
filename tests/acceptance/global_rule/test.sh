@@ -30,6 +30,17 @@ cleanup() {
         log_info "Cleaning up..."
         tofu destroy -auto-approve -lock=false 2>/dev/null || true
     else
+        # Force cleanup via API (in case state is corrupted)
+        log_info "Force cleaning global_rule and related resources via API..."
+        for rid in test-gr-basic test-gr-multi test-gr-ip test-gr-route; do
+            curl -s -X DELETE "http://localhost:9180/apisix/admin/global_rules/$rid" \
+                -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true
+        done
+        curl -s -X DELETE "http://localhost:9180/apisix/admin/routes/test-route-with-gr" \
+            -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true
+        curl -s -X DELETE "http://localhost:9180/apisix/admin/upstreams/test-gr-upstream" \
+            -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true
+
         log_warn "Leaving resources for debugging (set CLEANUP_ON_FAILURE=true to auto-cleanup)"
     fi
 }
