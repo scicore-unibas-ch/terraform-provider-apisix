@@ -1,17 +1,3 @@
-terraform {
-  required_providers {
-    apisix = {
-      source = "scicore/apisix"
-    }
-  }
-}
-
-provider "apisix" {
-  base_url  = var.apisix_base_url
-  admin_key = var.apisix_admin_key
-  timeout   = 30
-}
-
 variable "apisix_base_url" {
   type    = string
   default = "http://localhost:9180/apisix/admin"
@@ -21,6 +7,12 @@ variable "apisix_admin_key" {
   type      = string
   default   = "test123456789"
   sensitive = true
+}
+
+provider "apisix" {
+  base_url  = var.apisix_base_url
+  admin_key = var.apisix_admin_key
+  timeout   = 30
 }
 
 # Test 1: Basic upstream with single node

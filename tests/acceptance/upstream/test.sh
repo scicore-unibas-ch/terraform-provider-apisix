@@ -6,6 +6,9 @@ CLEANUP_ON_FAILURE=${CLEANUP_ON_FAILURE:-false}
 TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$TEST_DIR"
 
+# OpenTofu 1.11+ with dev_overrides doesn't need init
+# Provider is configured via ~/.tofurc dev_overrides
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -37,7 +40,9 @@ trap cleanup EXIT
 
 # Initialize
 log_info "Initializing Terraform..."
-tofu init -input=false
+# OpenTofu 1.11+ with dev_overrides: skip init, it's not necessary
+# The provider is loaded from dev_overrides in ~/.tofurc
+log_info "Using dev_overrides from ~/.tofurc (no init needed)"
 
 # Test 1: Create all upstreams
 log_info "Test 1: Create upstreams (basic, medium, complex)"
