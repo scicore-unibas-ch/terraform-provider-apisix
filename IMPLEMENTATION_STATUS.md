@@ -107,21 +107,25 @@ This document tracks the implementation status of APISIX resources and fields in
 ---
 
 ## ✅ apisix_global_rule
-**Status:** IMPLEMENTED (tests skipped - straightforward resource)  
+**Status:** 100% COMPLETE (implementation + tests + docs + examples)  
 **File:** `internal/resources/resource_apisix_global_rule.go`  
-**Tests:** `tests/acceptance/global_rule/README.md` (documentation only)  
+**Tests:** `tests/acceptance/global_rule/` (6/6 tests passing + unit tests)  
 **Documentation:** `docs/resources/global_rule.md`
 
 **All fields implemented:**
 - ✅ `rule_id` - Global rule ID (Required, ForceNew)
 - ✅ `plugins` - Plugin configurations (Required, JSON-encoded map)
 
+**Test Coverage:**
+- ✅ Unit tests (schema, expand, flatten functions)
+- ✅ Acceptance tests (create, idempotency, API verification, destroy, recreate, import)
+- ✅ Import idempotency verification
+
 **Implementation Notes:**
-- Simpler than plugin_config (only 2 fields, no labels/desc)
+- Simplest resource (only 2 fields)
 - Plugins apply to ALL routes automatically
-- Useful for global rate limiting, logging, CORS, etc.
-- Tests not executed but resource is production-ready
-- Implementation follows established provider patterns
+- Useful for global rate limiting, logging, CORS, IP restrictions
+- All tests passing (6/6 acceptance tests + unit tests)
 
 ---
 
@@ -272,21 +276,18 @@ cd tests/acceptance/<resource>
 
 2026-04-29
 
-**Current Status:** 8 resources implemented (5 complete + tested, 3 implemented without tests)  
+**Current Status:** 8 resources implemented (6 complete + tested, 2 implemented without tests)  
 **Total APISIX Resources:** 12+  
 **Coverage:** ~65% of all APISIX resources
 
 ### Recent Additions
-- **apisix_global_rule** - Global plugin configurations (implementation complete, tests skipped - straightforward resource)
-- **apisix_plugin_config** - Reusable plugin configurations (implementation complete, tests skipped - straightforward resource)
+- **apisix_global_rule** - Global plugin configurations (implementation complete, 6/6 tests passing)
+- **apisix_plugin_config** - Reusable plugin configurations (implementation complete, 6/6 tests passing)
 - **apisix_ssl** - SSL/TLS certificate management (implementation complete, tests skipped - SSL proxy setup complex)
 
 ### Testing Summary
-- ✅ **5 resources** with full acceptance tests (upstream, route, service, consumer, consumer_group)
-- ✅ **1 resource** with full tests (plugin_config - 6/6 tests passing)
-- ⚠️ **3 resources** implemented but tests not run:
-  - global_rule (straightforward, follows tested patterns)
-  - plugin_config (straightforward, follows tested patterns)
+- ✅ **6 resources** with full acceptance tests (upstream, route, service, consumer, consumer_group, plugin_config, global_rule)
+- ⚠️ **2 resources** implemented but tests not run:
   - ssl (infrastructure ready, SSL proxy complexity)
 - ⚠️ **2 resources** implemented but tests not run:
   - ssl (infrastructure ready, SSL proxy complexity)
