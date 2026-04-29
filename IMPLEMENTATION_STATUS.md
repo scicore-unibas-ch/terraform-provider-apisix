@@ -53,30 +53,29 @@ This document tracks the implementation status of APISIX resources and fields in
 
 ---
 
-## Resources Not Yet Implemented
+## ✅ apisix_ssl
+**Status:** IMPLEMENTED (tests pending SSL proxy enablement)  
+**File:** `internal/resources/resource_apisix_ssl.go`  
+**Tests:** `tests/acceptance/ssl/README.md` (documentation only - requires SSL proxy)  
+**Documentation:** `docs/resources/ssl.md`
 
-### ⏳ apisix_ssl
-**Priority:** HIGH  
-**API Docs:** https://apisix.apache.org/docs/apisix/admin-api/#ssl
-
-**Purpose:** Manage SSL/TLS certificates for HTTPS endpoints
-
-**Expected Fields:**
-- `id` - SSL certificate ID
-- `sni` - Server Name Indication (domain name)
-- `snis` - List of SNI names
-- `cert` - SSL certificate content
-- `key` - SSL private key content
-- `certs` - List of certificates (for SNI)
-- `keys` - List of keys (for SNI)
-- `ssl_protocols` - SSL/TLS versions to enable
-- `client` - Client certificate verification settings
-- `labels` - Resource labels
+**All fields implemented:**
+- ✅ `sni` - Primary SNI
+- ✅ `snis` - List of SNIs
+- ✅ `cert` - SSL certificate (sensitive)
+- ✅ `key` - SSL private key (sensitive)
+- ✅ `certs` - Multiple certificates for SNI
+- ✅ `keys` - Multiple keys for SNI
+- ✅ `ssl_protocols` - TLS version configuration
+- ✅ `client` - mTLS client verification (ca_cert, depth)
+- ✅ `labels` - Resource labels
 
 **Implementation Notes:**
-- Certificate and key are sensitive fields
-- Supports multiple certificates for SNI
-- Can reference existing certificates or embed them
+- Certificate and key are marked as sensitive
+- API returns masked certificate data (not read back)
+- Full support for mTLS via `client` block
+- Tests require SSL proxy enabled in APISIX (not enabled in default test environment)
+- See `tests/acceptance/ssl/README.md` for enabling SSL tests
 
 ---
 
@@ -186,7 +185,7 @@ This document tracks the implementation status of APISIX resources and fields in
 ## Implementation Priority Recommendations
 
 ### Phase 1 (High Priority)
-1. **apisix_ssl** - Common requirement for HTTPS deployments
+1. ✅ **apisix_ssl** - IMPLEMENTED (tests pending SSL proxy enablement)
 2. **apisix_plugin_config** - Useful for DRY configurations
 
 ### Phase 2 (Medium Priority)
@@ -263,6 +262,9 @@ cd tests/acceptance/<resource>
 
 2026-04-29
 
-**Current Status:** 5 resources implemented (3 complete, 2 with minor gaps)  
+**Current Status:** 6 resources implemented (5 complete, 1 with tests pending)  
 **Total APISIX Resources:** 12+  
-**Coverage:** ~40% of all APISIX resources
+**Coverage:** ~50% of all APISIX resources
+
+### Recent Additions
+- **apisix_ssl** - SSL/TLS certificate management (implementation complete, tests require SSL proxy)
