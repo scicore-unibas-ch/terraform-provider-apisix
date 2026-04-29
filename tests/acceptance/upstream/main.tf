@@ -17,6 +17,8 @@ provider "apisix" {
 
 # Test 1: Basic upstream with single node
 resource "apisix_upstream" "basic" {
+  provider = apisix
+  
   name = "test-upstream-basic"
   type = "roundrobin"
   desc = "Basic test upstream with single node"

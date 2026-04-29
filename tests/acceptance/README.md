@@ -1,6 +1,14 @@
 # Manual Testing Guide
 
-Due to OpenTofu 1.11+ compatibility issues with `dev_overrides`, automated acceptance tests cannot run locally without publishing the provider to a registry. Use these manual testing procedures instead.
+## Why Manual Testing?
+
+OpenTofu 1.11+ requires providers to be either:
+1. Published to the OpenTofu Registry, OR
+2. Available in a local mirror with proper version metadata
+
+Our provider (`scicore/apisix`) is not yet published to the registry, so automated acceptance tests cannot run locally with `tofu apply`. 
+
+**Note:** The `pescobar/slurm` provider works because it's published to the registry (v0.1.3), even though the binary is overridden via `dev_overrides`.
 
 ## Prerequisites
 
