@@ -1,25 +1,45 @@
 # Binaries
+terraform-provider-apisix
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
-terraform-provider-apisix
 
-# Test binary, built for local testing
-terraform-provider-apisix.test
+# Test binary
+*.test
 
-# Dependency directories
+# Output of the go coverage tool
+*.out
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+*.tfplan
+
+# OpenTofu
+.tofu/
+*.tofustate
+*.tofuplan
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
 vendor/
-
-# Go workspace file
-go.work
 
 # Test artifacts
 tests/acceptance/*/.tofurc
-tests/acceptance/*/terraform.tfstate
-tests/acceptance/*/terraform.tfstate.backup
-tests/acceptance/*/terraform.tfstate.*
+tests/acceptance/*/terraform.tfstate*
+tests/acceptance/*/.terraform*
 tests/acceptance/*/.terraform.lock.hcl
-tests/acceptance/*/.terraform/
-tests/acceptance/*/*.backup
