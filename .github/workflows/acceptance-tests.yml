@@ -18,6 +18,12 @@ jobs:
         include:
           - apisix_version: "3.16.0"
             etcd_version: "3.5.9"
+          - apisix_version: "3.15.0"
+            etcd_version: "3.5.9"
+          - apisix_version: "3.14.1"
+            etcd_version: "3.5.9"
+          - apisix_version: "3.13.0"
+            etcd_version: "3.5.9"
 
     steps:
       - uses: actions/checkout@v6
