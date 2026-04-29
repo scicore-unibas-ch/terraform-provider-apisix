@@ -123,6 +123,7 @@ resource "apisix_consumer" "complete" {
 The following arguments are supported:
 
 - `username` - (Required) Username of the consumer. This is the unique identifier. Changing this forces a new resource to be created.
+- `group_id` - (Optional) Group ID of the consumer. Requires a pre-existing consumer group with matching ID.
 - `desc` - (Optional) Description of the consumer.
 - `plugins` - (Optional) Plugin configurations as a map of JSON-encoded strings. Common authentication plugins:
   - `key-auth` - Simple API key authentication

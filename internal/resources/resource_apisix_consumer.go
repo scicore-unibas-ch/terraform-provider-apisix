@@ -31,6 +31,11 @@ func ResourceApisixConsumer() *schema.Resource {
 				ForceNew:    true,
 				Description: "Username of the consumer. This is the unique identifier.",
 			},
+			"group_id": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "Group ID of the consumer for consumer grouping.",
+			},
 			"desc": {
 				Type:        schema.TypeString,
 				Optional:    true,
@@ -131,6 +136,9 @@ func expandConsumer(d *schema.ResourceData) map[string]interface{} {
 	// Username is required in the request body
 	consumer["username"] = d.Get("username").(string)
 
+	if v, ok := d.GetOk("group_id"); ok {
+		consumer["group_id"] = v.(string)
+	}
 	if v, ok := d.GetOk("desc"); ok {
 		consumer["desc"] = v.(string)
 	}
@@ -163,6 +171,7 @@ func flattenConsumer(d *schema.ResourceData, value interface{}) diag.Diagnostics
 	}
 
 	d.Set("username", data["username"])
+	d.Set("group_id", data["group_id"])
 	d.Set("desc", data["desc"])
 
 	if plugins, ok := data["plugins"].(map[string]interface{}); ok {
