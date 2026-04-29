@@ -93,7 +93,7 @@ for rule_id in test-gr-basic test-gr-multi test-gr-ip test-gr-route; do
     curl -s -X DELETE "http://localhost:9180/apisix/admin/global_rules/$rule_id" \
         -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true
 done
-curl -s -X DELETE "http://localhost:9180/apisix/admin/routesroutes/test-route-with-gr" \
+curl -s -X DELETE "http://localhost:9180/apisix/admin/routes/test-route-with-gr" \
     -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true
 curl -s -X DELETE "http://localhost:9180/apisix/admin/upstreams/test-gr-upstream" \
     -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true

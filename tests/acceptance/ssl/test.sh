@@ -114,11 +114,11 @@ for resource in basic multi_sni tls13 with_labels; do
     log_info "SSL certificate '$resource' created with SNI: $SSL_ID"
     
     # Verify via APISIX API
-    RESPONSE=$(curl -k -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/routesssl/$SSL_ID" \
+    RESPONSE=$(curl -k -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/ssls/$SSL_ID" \
         -H "X-API-KEY: test123456789")
     if [ "$RESPONSE" != "200" ]; then
         log_error "SSL certificate '$resource' not found in APISIX (HTTP $RESPONSE)"
-        curl -k -s "http://localhost:9180/apisix/admin/routesssl/$SSL_ID" -H "X-API-KEY: test123456789" | head -20
+        curl -k -s "http://localhost:9180/apisix/admin/ssls/$SSL_ID" -H "X-API-KEY: test123456789" | head -20
         exit 1
     fi
 done
@@ -145,13 +145,13 @@ log_info "Test 3: Verify SSL configurations"
 
 # Verify multi_sni certificate
 MULTI_SNI_ID=$(tofu state show apisix_ssl.multi_sni 2>/dev/null | grep '^\s*sni\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
-RESPONSE=$(curl -k -s "http://localhost:9180/apisix/admin/routesssl/$MULTI_SNI_ID" -H "X-API-KEY: test123456789")
+RESPONSE=$(curl -k -s "http://localhost:9180/apisix/admin/ssls/$MULTI_SNI_ID" -H "X-API-KEY: test123456789")
 SNIS_COUNT=$(echo "$RESPONSE" | jq -r '.value.snis | length')
 [ "$SNIS_COUNT" = "2" ] || { log_error "multi_sni certificate SNIs mismatch: got $SNIS_COUNT"; exit 1; }
 
 # Verify tls13 certificate
 TLS13_ID=$(tofu state show apisix_ssl.tls13 2>/dev/null | grep '^\s*sni\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
-RESPONSE=$(curl -k -s "http://localhost:9180/apisix/admin/routesssl/$TLS13_ID" -H "X-API-KEY: test123456789")
+RESPONSE=$(curl -k -s "http://localhost:9180/apisix/admin/ssls/$TLS13_ID" -H "X-API-KEY: test123456789")
 SSL_PROTOCOLS=$(echo "$RESPONSE" | jq -r '.value.ssl_protocols | length')
 [ "$SSL_PROTOCOLS" = "1" ] || { log_error "tls13 certificate ssl_protocols mismatch: got $SSL_PROTOCOLS"; exit 1; }
 PROTOCOL=$(echo "$RESPONSE" | jq -r '.value.ssl_protocols[0]')
@@ -159,7 +159,7 @@ PROTOCOL=$(echo "$RESPONSE" | jq -r '.value.ssl_protocols[0]')
 
 # Verify with_labels certificate
 WITH_LABELS_ID=$(tofu state show apisix_ssl.with_labels 2>/dev/null | grep '^\s*sni\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
-RESPONSE=$(curl -k -s "http://localhost:9180/apisix/admin/routesssl/$WITH_LABELS_ID" -H "X-API-KEY: test123456789")
+RESPONSE=$(curl -k -s "http://localhost:9180/apisix/admin/ssls/$WITH_LABELS_ID" -H "X-API-KEY: test123456789")
 LABELS_COUNT=$(echo "$RESPONSE" | jq -r '.value.labels | keys | length')
 [ "$LABELS_COUNT" = "3" ] || { log_error "with_labels certificate labels mismatch: got $LABELS_COUNT"; exit 1; }
 
@@ -174,7 +174,7 @@ tofu destroy -auto-approve -lock=false
 for resource in basic multi_sni tls13 with_labels; do
     SSL_ID=$(tofu state show apisix_ssl.$resource 2>/dev/null | grep "^ *sni *" | cut -d'"' -f2 || echo "")
     if [ -n "$SSL_ID" ]; then
-        RESPONSE=$(curl -k -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/routesssl/$SSL_ID" \
+        RESPONSE=$(curl -k -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/ssls/$SSL_ID" \
             -H "X-API-KEY: test123456789")
         if [ "$RESPONSE" != "404" ]; then
             log_error "SSL certificate '$resource' still exists in APISIX (HTTP $RESPONSE)"

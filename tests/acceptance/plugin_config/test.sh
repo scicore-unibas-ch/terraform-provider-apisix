@@ -143,7 +143,7 @@ LABELS_COUNT=$(echo "$RESPONSE" | jq -r '.value.labels | keys | length')
 
 # Verify route integration
 ROUTE_ID=$(tofu state show apisix_route.with_plugin_config 2>/dev/null | grep '^\s*id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
-RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/routesroutes/$ROUTE_ID" -H "X-API-KEY: test123456789")
+RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/routes/$ROUTE_ID" -H "X-API-KEY: test123456789")
 PLUGIN_CONFIG_ID=$(echo "$RESPONSE" | jq -r '.value.plugin_config_id')
 [ "$PLUGIN_CONFIG_ID" = "test-pc-route" ] || { log_error "Route plugin_config_id mismatch: got $PLUGIN_CONFIG_ID"; exit 1; }
 
