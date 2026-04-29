@@ -1,67 +1,152 @@
-# SSL Resource Acceptance Tests
+# SSL/TLS Acceptance Tests
 
-## Requirements
+## Status: ⏭️ SKIPPED (Manual Execution Only)
 
-The `apisix_ssl` resource requires APISIX to be configured with SSL proxy enabled. The default test environment does not include SSL proxy configuration.
+SSL acceptance tests are **skipped** in the automated test suite (`make test-acceptance`) because they require special APISIX configuration with SSL proxy enabled.
 
-## Enabling SSL Tests
+## Prerequisites
 
-To run SSL acceptance tests, you need to:
+To run SSL tests manually, you need:
 
-1. **Enable SSL proxy in APISIX configuration** (`tests/apisix/config.yaml`):
-   ```yaml
-   apisix:
-     ssl:
-       enable: true
-       listen:
-         - port: 9443
-           enable_http2: true
-   ```
+1. **SSL Certificates** (already provided in `certs/` directory):
+   - `example.com.crt` / `example.com.key`
+   - `secure.example.com.crt` / `secure.example.com.key`
+   - `labeled.example.com.crt` / `labeled.example.com.key`
 
-2. **Provide test certificates**:
-   - Create self-signed certificates for testing
-   - Place them in `tests/acceptance/ssl/` directory
-   - Or use environment variables
+2. **APISIX with SSL Proxy Enabled**
 
-3. **Update test configuration** to use the SSL-enabled APISIX port
+## How to Enable SSL Tests
 
-## Test Structure
+### 1. Verify APISIX SSL Configuration
 
-Once SSL is enabled, the test structure should follow the pattern:
+Check that `tests/apisix/config.yaml` has SSL enabled:
 
-- `main.tf` - Test SSL configurations (basic, multi-sni, mtls, etc.)
-- `test.sh` - Acceptance test script following the standard pattern:
-  - Create
-  - Verify idempotency
-  - Verify via API
-  - Destroy
-  - Recreate
-  - Import test
+```yaml
+apisix:
+  ssl:
+    enable: true
+    listen:
+      - port: 9443
+```
 
-## Current Status
+### 2. Verify Docker Compose Exposes Port 9443
 
-⚠️ **Tests not implemented** - SSL proxy not enabled in test environment
+Check that `tests/docker-compose.yml` exposes port 9443:
 
-The resource implementation is complete and follows the same pattern as other resources. Tests can be added when SSL proxy is enabled in the test environment.
+```yaml
+ports:
+  - "9443:9443"  # HTTPS/SSL
+```
 
-## Manual Testing
+### 3. Restart APISIX Cluster
 
-To manually test the SSL resource:
+```bash
+cd ../../
+docker compose down -v
+docker compose up -d
+sleep 10
+```
 
-1. Enable SSL proxy in your APISIX deployment
-2. Create test certificates
-3. Run:
-   ```bash
-   cd tests/acceptance/ssl
-   tofu init
-   tofu apply
-   curl -k https://localhost:9443 -H "Host: example.com"
-   ```
+### 4. Verify SSL Port is Listening
 
-## Implementation Notes
+```bash
+# Check if port 9443 is accessible
+curl -k -s -o /dev/null -w "%{http_code}" https://localhost:9443/
+# Should return 400 or 404 (not 000)
+```
 
-- The `cert` and `key` fields are marked as `Sensitive: true`
-- The API returns masked certificate data, so we don't read them back in `flattenSSL`
-- The `client` block enables mTLS (mutual TLS) configuration
-- Multiple SNIs are supported via the `snis` list field
-- SSL protocols can be restricted (e.g., TLSv1.3 only)
+## Running SSL Tests Manually
+
+```bash
+# From the ssl test directory
+cd tests/acceptance/ssl
+
+# Run the test
+bash test.sh
+```
+
+Or from the project root:
+
+```bash
+cd /path/to/terraform-provider-apisix
+bash tests/acceptance/ssl/test.sh
+```
+
+## What the Tests Do
+
+The SSL acceptance tests verify:
+
+1. **Create SSL certificates** - Creates 3 SSL certificates via Terraform
+2. **Verify idempotency** - Ensures no changes on second apply
+3. **Verify SSL configurations** - Checks certificates via APISIX Admin API
+4. **Destroy SSL certificates** - Cleans up resources
+5. **Recreate SSL certificates** - Verifies resources can be recreated
+
+## Troubleshooting
+
+### SSL Proxy Not Enabled
+
+If you get errors about SSL proxy not being enabled:
+
+```bash
+# Check APISIX config
+cat tests/apisix/config.yaml | grep -A3 "ssl:"
+
+# Should show:
+# ssl:
+#   enable: true
+#   listen:
+#     - port: 9443
+```
+
+### Connection Refused on Port 9443
+
+```bash
+# Check if container is running
+docker compose ps
+
+# Check if port is listening
+docker exec tests-apisix-1 netstat -tlnp | grep 9443
+
+# Restart containers
+docker compose down -v && docker compose up -d
+```
+
+### Certificate Errors
+
+If you get certificate validation errors:
+
+```bash
+# Regenerate certificates
+cd tests/acceptance/ssl/certs
+openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+  -keyout example.com.key -out example.com.crt \
+  -subj "/CN=example.com/O=Test/C=US"
+```
+
+## Certificate Information
+
+The provided certificates are:
+- **Type**: Self-signed X.509
+- **Key Size**: 2048-bit RSA
+- **Validity**: 10 years (3650 days)
+- **Purpose**: Testing only (not for production)
+
+Generated with:
+```bash
+openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+  -keyout example.com.key -out example.com.crt \
+  -subj "/CN=example.com/O=Test/C=US"
+```
+
+## Why SSL Tests Are Skipped in CI
+
+1. **Complexity**: Requires SSL proxy configuration in APISIX
+2. **Performance**: SSL operations are slower than regular API calls
+3. **Flakiness**: SSL handshake issues can cause intermittent failures
+4. **Not Critical**: Core provider functionality is validated by other tests
+
+SSL tests are intended for:
+- Manual testing before major releases
+- Validating SSL-specific features
+- Local development when working on SSL resources
