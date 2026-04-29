@@ -85,18 +85,30 @@ To sign release artifacts:
 
 ### 3. Test Workflows Locally (Optional)
 
-You can test the workflows locally using [act](https://github.com/nektos/act):
+You can test the provider locally using the provided Makefile:
 
 ```bash
-# Install act
-brew install act
-
 # Run unit tests
-act push
+make test
 
-# Run acceptance tests (requires Docker)
-act -j acceptance
+# Run acceptance tests (requires Docker Compose)
+cd tests/
+docker compose up -d  # Start APISIX cluster
+
+# Then run individual test suites:
+cd acceptance/upstream && ./test.sh
+cd ../route && ./test.sh
+cd ../service && ./test.sh
+cd ../consumer && ./test.sh
+cd ../consumer_group && ./test.sh
+cd ../plugin_config && ./test.sh
+cd ../global_rule && ./test.sh
+
+# Cleanup when done
+docker compose down
 ```
+
+**Note:** The acceptance tests workflow in GitHub Actions uses Docker Compose automatically, so tests that pass locally should pass in CI.
 
 ## OpenTofu Registry Publication
 
