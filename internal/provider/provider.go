@@ -35,6 +35,7 @@ func Provider() *schema.Provider {
 		ResourcesMap: map[string]*schema.Resource{
 			"apisix_upstream": resources.ResourceApisixUpstream(),
 			"apisix_route":    resources.ResourceApisixRoute(),
+			"apisix_service":  resources.ResourceApisixService(),
 		},
 		ConfigureContextFunc: providerConfigure,
 	}

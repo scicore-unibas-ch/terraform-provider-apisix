@@ -14,16 +14,6 @@ import (
 )
 
 // getClient retrieves the APISIX client from provider meta
-func getClient(meta interface{}) (*apisix.Client, error) {
-	if meta == nil {
-		return nil, fmt.Errorf("provider meta is nil")
-	}
-	client, ok := meta.(*apisix.Client)
-	if !ok {
-		return nil, fmt.Errorf("failed to convert provider meta to APISIX client")
-	}
-	return client, nil
-}
 
 func ResourceApisixUpstream() *schema.Resource {
 	return &schema.Resource{
