@@ -5,6 +5,6 @@ provider "registry.opentofu.org/scicore/apisix" {
   version     = "0.1.0"
   constraints = "0.1.0"
   hashes = [
-    "h1:O1ktZRRm3Tk3pj7gPtDhM7xh+rn4VJ2tlFR/sfTBHCw=",
+    "h1:njz2jJRVqv+1xoCf+b0p7mtre6/cJVvMHDiioruFORY=",
   ]
 }
