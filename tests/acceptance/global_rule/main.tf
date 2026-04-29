@@ -41,6 +41,7 @@ resource "apisix_global_rule" "multi_plugins" {
       allow_methods = "*"
     })
     "limit-req" = jsonencode({
+      key = "remote_addr"
       rate = 100
       burst = 50
     })
