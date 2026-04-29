@@ -43,10 +43,17 @@ func ResourceApisixService() *schema.Resource {
 				Description: "List of hosts to match.",
 			},
 			"plugins": {
-				Type:        schema.TypeMap,
-				Optional:    true,
-				Elem:        &schema.Schema{Type: schema.TypeString},
-				Description: "Plugin configurations as JSON-encoded strings.",
+				Type:          schema.TypeMap,
+				Optional:      true,
+				Elem:          &schema.Schema{Type: schema.TypeString},
+				Description:   "Plugin configurations as JSON-encoded strings.",
+				ConflictsWith: []string{"script"},
+			},
+			"script": {
+				Type:          schema.TypeString,
+				Optional:      true,
+				Description:   "Lua script for custom logic. Conflicts with `plugins`.",
+				ConflictsWith: []string{"plugins"},
 			},
 			"upstream_id": {
 				Type:          schema.TypeString,
@@ -210,6 +217,9 @@ func expandService(d *schema.ResourceData) map[string]interface{} {
 		}
 		service["plugins"] = plugins
 	}
+	if v, ok := d.GetOk("script"); ok {
+		service["script"] = v.(string)
+	}
 	if v, ok := d.GetOk("upstream_id"); ok {
 		service["upstream_id"] = v.(string)
 	}
@@ -251,6 +261,10 @@ func flattenService(d *schema.ResourceData, value interface{}) diag.Diagnostics 
 			}
 		}
 		d.Set("plugins", pluginMap)
+	}
+
+	if script, ok := data["script"]; ok {
+		d.Set("script", script)
 	}
 
 	if upstream, ok := data["upstream"]; ok {
