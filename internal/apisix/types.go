@@ -14,10 +14,11 @@ type APISIXListResponse struct {
 
 // UpstreamNode represents a single node in an upstream
 type UpstreamNode struct {
-	Host     string `json:"host"`
-	Port     int    `json:"port"`
-	Weight   int    `json:"weight"`
-	Priority int    `json:"priority,omitempty"`
+	Host     string            `json:"host"`
+	Port     int               `json:"port,omitempty"`
+	Weight   int               `json:"weight"`
+	Priority int               `json:"priority,omitempty"`
+	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
 // UpstreamTimeout represents timeout configuration for an upstream

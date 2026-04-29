@@ -90,10 +90,6 @@ resource "apisix_upstream" "complex" {
     port     = 9080
     weight   = 100
     priority = 0
-    metadata = {
-      version = "v1"
-      zone    = "us-east-1"
-    }
   }
 
   nodes {

@@ -40,9 +40,7 @@ trap cleanup EXIT
 
 # Initialize
 log_info "Initializing Terraform..."
-# OpenTofu 1.11+ with dev_overrides: skip init, it's not necessary
-# The provider is loaded from dev_overrides in ~/.tofurc
-log_info "Using dev_overrides from ~/.tofurc (no init needed)"
+tofu init -input=false
 
 # Test 1: Create all upstreams
 log_info "Test 1: Create upstreams (basic, medium, complex)"
@@ -50,9 +48,10 @@ tofu apply -auto-approve -lock=false
 
 # Verify all upstreams were created
 for resource in basic medium complex; do
-    UPSTREAM_ID=$(tofu state show apisix_upstream.$resource 2>/dev/null | grep "^ *id *" | cut -d'"' -f2)
+    UPSTREAM_ID=$(tofu state show apisix_upstream.$resource 2>&1 | grep '^\s*id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
     if [ -z "$UPSTREAM_ID" ]; then
         log_error "Failed to get upstream ID for $resource"
+        tofu state show apisix_upstream.$resource 2>&1 | head -5
         exit 1
     fi
     log_info "Upstream '$resource' created with ID: $UPSTREAM_ID"
@@ -62,6 +61,7 @@ for resource in basic medium complex; do
         -H "X-API-KEY: test123456789")
     if [ "$RESPONSE" != "200" ]; then
         log_error "Upstream '$resource' not found in APISIX (HTTP $RESPONSE)"
+        curl -s "http://localhost:9180/apisix/admin/upstreams/$UPSTREAM_ID" -H "X-API-KEY: test123456789" | head -20
         exit 1
     fi
 done
@@ -84,14 +84,19 @@ fi
 
 # Test 3: Verify specific fields in complex upstream
 log_info "Test 3: Verify complex upstream configuration"
-COMPLEX_ID=$(tofu state show apisix_upstream.complex 2>/dev/null | grep "^ *id *" | cut -d'"' -f2)
+COMPLEX_ID=$(tofu state show apisix_upstream.complex 2>/dev/null | grep '^\s*id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
 RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/upstreams/$COMPLEX_ID" -H "X-API-KEY: test123456789")
 
-# Check for key fields
-echo "$RESPONSE" | grep -q '"type":"chash"' || { log_error "Complex upstream type mismatch"; exit 1; }
-echo "$RESPONSE" | grep -q '"hash_on":"vars"' || { log_error "Complex upstream hash_on mismatch"; exit 1; }
-echo "$RESPONSE" | grep -q '"key":"remote_addr"' || { log_error "Complex upstream key mismatch"; exit 1; }
-echo "$RESPONSE" | grep -q '"retries":2' || { log_error "Complex upstream retries mismatch"; exit 1; }
+# Check for key fields using jq for proper JSON parsing
+TYPE=$(echo "$RESPONSE" | jq -r '.value.type')
+HASH_ON=$(echo "$RESPONSE" | jq -r '.value.hash_on')
+KEY=$(echo "$RESPONSE" | jq -r '.value.key')
+RETRIES=$(echo "$RESPONSE" | jq -r '.value.retries')
+
+[ "$TYPE" = "chash" ] || { log_error "Complex upstream type mismatch: got $TYPE"; exit 1; }
+[ "$HASH_ON" = "vars" ] || { log_error "Complex upstream hash_on mismatch: got $HASH_ON"; exit 1; }
+[ "$KEY" = "remote_addr" ] || { log_error "Complex upstream key mismatch: got $KEY"; exit 1; }
+[ "$RETRIES" = "2" ] || { log_error "Complex upstream retries mismatch: got $RETRIES"; exit 1; }
 log_info "✓ Complex upstream configuration verified"
 
 # Test 4: Destroy all upstreams
@@ -128,13 +133,13 @@ log_info "✓ All upstreams recreated successfully"
 # Test 6: Import test for all upstreams
 log_info "Test 6: Import test"
 for resource in basic medium complex; do
-    UPSTREAM_ID=$(tofu state show apisix_upstream.$resource 2>/dev/null | grep "^ *id *" | cut -d'"' -f2)
+    UPSTREAM_ID=$(tofu state show apisix_upstream.$resource 2>/dev/null | grep '^\s*id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
     
     # Remove from state
     tofu state rm apisix_upstream.$resource
     
     # Import back
-    tofu import apisix_upstream.test "$UPSTREAM_ID"
+    tofu import apisix_upstream.$resource "$UPSTREAM_ID"
     
     # Verify import worked (no changes after import)
     set +e
@@ -144,7 +149,7 @@ for resource in basic medium complex; do
     
     if [ $EXIT_CODE -ne 0 ]; then
         log_error "Import failed for $resource - state mismatch"
-        tofu plan -lock=false
+        tofu plan -lock=false | head -30
         exit 1
     fi
     log_info "✓ Import successful for $resource"

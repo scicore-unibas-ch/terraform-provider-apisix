@@ -437,6 +437,13 @@ func expandNodes(nodes []interface{}) []apisix.UpstreamNode {
 		if v, ok := n["priority"].(int); ok {
 			upstreamNode.Priority = v
 		}
+		if v, ok := n["metadata"].(map[string]interface{}); ok && len(v) > 0 {
+			metadata := make(map[string]string)
+			for k, val := range v {
+				metadata[k] = val.(string)
+			}
+			upstreamNode.Metadata = metadata
+		}
 		result = append(result, upstreamNode)
 	}
 	return result
@@ -510,7 +517,13 @@ func flattenUpstream(d *schema.ResourceData, value interface{}) diag.Diagnostics
 	d.Set("retries", data["retries"])
 	d.Set("retry_timeout", data["retry_timeout"])
 
-	if labels, ok := data["labels"].(map[string]string); ok {
+	if labelsRaw, ok := data["labels"].(map[string]interface{}); ok {
+		labels := make(map[string]string)
+		for k, v := range labelsRaw {
+			if vStr, ok := v.(string); ok {
+				labels[k] = vStr
+			}
+		}
 		d.Set("labels", labels)
 	}
 
