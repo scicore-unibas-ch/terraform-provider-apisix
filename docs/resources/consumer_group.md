@@ -119,6 +119,7 @@ resource "apisix_consumer" "example" {
 The following arguments are supported:
 
 - `group_id` - (Required) ID of the consumer group. This is the unique identifier. Changing this forces a new resource to be created.
+- `name` - (Optional) Name of the consumer group. Used for filtering and identification.
 - `desc` - (Optional) Description of the consumer group.
 - `plugins` - (Required) Plugin configurations as a map of JSON-encoded strings. **Consumer groups require at least one plugin.** Common plugins:
   - `limit-count` - Rate limiting by count/time window

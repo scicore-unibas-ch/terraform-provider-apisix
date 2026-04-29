@@ -41,12 +41,12 @@ echo "Executing: tofu init -input=false"
 tofu init -input=false
 
 # Test 1: Create all consumer groups
-log_info "Test 1: Create consumer groups (basic, with_plugins, multi_plugins, with_labels, consumer_test)"
+log_info "Test 1: Create consumer groups (basic, with_plugins, multi_plugins, with_name, with_labels, consumer_test)"
 echo "Executing: tofu apply -auto-approve -lock=false"
 tofu apply -auto-approve -lock=false
 
 # Verify all consumer groups were created
-for resource in basic with_plugins multi_plugins with_labels consumer_test; do
+for resource in basic with_plugins multi_plugins with_name with_labels consumer_test; do
     GROUP_ID=$(tofu state show apisix_consumer_group.$resource 2>&1 | grep '^\s*group_id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
     if [ -z "$GROUP_ID" ]; then
         log_error "Failed to get consumer group ID for $resource"
@@ -97,6 +97,12 @@ RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/consumer_groups/$MULTI_PL
 PLUGINS_COUNT=$(echo "$RESPONSE" | jq -r '.value.plugins | keys | length')
 [ "$PLUGINS_COUNT" = "2" ] || { log_error "multi_plugins consumer group plugins mismatch: got $PLUGINS_COUNT"; exit 1; }
 
+# Verify with_name consumer group
+WITH_NAME_ID=$(tofu state show apisix_consumer_group.with_name 2>/dev/null | grep '^\s*group_id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
+RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/consumer_groups/$WITH_NAME_ID" -H "X-API-KEY: test123456789")
+NAME=$(echo "$RESPONSE" | jq -r '.value.name')
+[ "$NAME" = "Premium Tier Group" ] || { log_error "with_name consumer group name mismatch: got $NAME"; exit 1; }
+
 # Verify with_labels consumer group
 WITH_LABELS_ID=$(tofu state show apisix_consumer_group.with_labels 2>/dev/null | grep '^\s*group_id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
 RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/consumer_groups/$WITH_LABELS_ID" -H "X-API-KEY: test123456789")
@@ -111,7 +117,7 @@ echo "Executing: tofu destroy -auto-approve -lock=false"
 tofu destroy -auto-approve -lock=false
 
 # Verify all consumer groups were deleted
-for resource in basic with_plugins multi_plugins with_labels consumer_test; do
+for resource in basic with_plugins multi_plugins with_name with_labels consumer_test; do
     GROUP_ID=$(tofu state show apisix_consumer_group.$resource 2>/dev/null | grep "^ *group_id *" | cut -d'"' -f2 || echo "")
     if [ -n "$GROUP_ID" ]; then
         RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/consumer_groups/$GROUP_ID" \
@@ -129,7 +135,7 @@ log_info "Test 5: Recreate consumer groups"
 echo "Executing: tofu apply -auto-approve -lock=false"
 tofu apply -auto-approve -lock=false
 
-for resource in basic with_plugins multi_plugins with_labels consumer_test; do
+for resource in basic with_plugins multi_plugins with_name with_labels consumer_test; do
     GROUP_ID=$(tofu state show apisix_consumer_group.$resource 2>/dev/null | grep "^ *group_id *" | cut -d'"' -f2)
     if [ -z "$GROUP_ID" ]; then
         log_error "Failed to get consumer group ID for $resource after recreation"
@@ -140,7 +146,7 @@ log_info "✓ All consumer groups recreated successfully"
 
 # Test 6: Import test for all consumer groups
 log_info "Test 6: Import test"
-for resource in basic with_plugins multi_plugins with_labels consumer_test; do
+for resource in basic with_plugins multi_plugins with_name with_labels consumer_test; do
     GROUP_ID=$(tofu state show apisix_consumer_group.$resource 2>/dev/null | grep '^\s*group_id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
     
     # Remove from state

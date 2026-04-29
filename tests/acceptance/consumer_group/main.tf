@@ -73,6 +73,21 @@ resource "apisix_consumer_group" "multi_plugins" {
   }
 }
 
+# Consumer group with name
+resource "apisix_consumer_group" "with_name" {
+  group_id = "test-group-with-name"
+  name     = "Premium Tier Group"
+  desc     = "Consumer group with name field"
+
+  plugins = {
+    "limit-count" = jsonencode({
+      count         = 5000
+      time_window   = 60
+      rejected_code = 429
+    })
+  }
+}
+
 # Consumer group with labels
 resource "apisix_consumer_group" "with_labels" {
   group_id = "test-group-labels"

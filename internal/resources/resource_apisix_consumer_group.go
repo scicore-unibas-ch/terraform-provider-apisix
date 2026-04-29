@@ -31,6 +31,11 @@ func ResourceApisixConsumerGroup() *schema.Resource {
 				ForceNew:    true,
 				Description: "ID of the consumer group. This is the unique identifier. Changing this forces a new resource to be created.",
 			},
+			"name": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "Name of the consumer group. Used for filtering and identification.",
+			},
 			"desc": {
 				Type:        schema.TypeString,
 				Optional:    true,
@@ -40,7 +45,7 @@ func ResourceApisixConsumerGroup() *schema.Resource {
 				Type:        schema.TypeMap,
 				Optional:    true,
 				Elem:        &schema.Schema{Type: schema.TypeString},
-				Description: "Plugin configurations as JSON-encoded strings. Plugins applied to all consumers in this group.",
+				Description: "Plugin configurations as JSON-encoded strings. Plugins applied to all consumers in this group. At least one plugin is required by APISIX.",
 			},
 			"labels": {
 				Type:        schema.TypeMap,
@@ -131,6 +136,9 @@ func expandConsumerGroup(d *schema.ResourceData) map[string]interface{} {
 	// Group ID is required in the request body
 	group["id"] = d.Get("group_id").(string)
 
+	if v, ok := d.GetOk("name"); ok {
+		group["name"] = v.(string)
+	}
 	if v, ok := d.GetOk("desc"); ok {
 		group["desc"] = v.(string)
 	}
@@ -163,6 +171,7 @@ func flattenConsumerGroup(d *schema.ResourceData, value interface{}) diag.Diagno
 	}
 
 	d.Set("group_id", data["id"])
+	d.Set("name", data["name"])
 	d.Set("desc", data["desc"])
 
 	if plugins, ok := data["plugins"].(map[string]interface{}); ok {
