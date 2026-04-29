@@ -129,7 +129,7 @@ func resourceApisixServiceCreate(ctx context.Context, d *schema.ResourceData, me
 	service := expandService(d)
 	id := d.Get("name").(string)
 	if id == "" {
-		id = fmt.Sprintf("service-%d", strings.ReplaceAll(fmt.Sprintf("%d", time.Now().UnixNano()), "-", ""))
+		id = fmt.Sprintf("service-%d", time.Now().UnixNano())
 	}
 
 	err = client.Create(ctx, "services", id, service)

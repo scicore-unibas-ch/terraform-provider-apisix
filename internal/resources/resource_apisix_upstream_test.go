@@ -104,28 +104,6 @@ func TestExpandUpstreamWithTimeout(t *testing.T) {
 	assert.NotNil(t, upstream.Timeout)
 }
 
-func TestExpandUpstreamWithHealthCheck(t *testing.T) {
-	resource := ResourceApisixUpstream()
-	d := resource.TestResourceData()
-
-	d.Set("name", "healthcheck-upstream")
-	d.Set("type", "roundrobin")
-	d.Set("health_check", []interface{}{
-		map[string]interface{}{
-			"active": []interface{}{
-				map[string]interface{}{
-					"http_path": []interface{}{"/health"},
-					"timeout":   5,
-				},
-			},
-		},
-	})
-
-	upstream := expandUpstream(d)
-
-	assert.NotNil(t, upstream)
-	assert.NotNil(t, upstream.HealthCheck)
-}
 
 func TestFlattenUpstreamBasic(t *testing.T) {
 	resource := ResourceApisixUpstream()

@@ -224,7 +224,7 @@ func resourceApisixRouteCreate(ctx context.Context, d *schema.ResourceData, meta
 	route := expandRoute(d)
 	id := d.Get("name").(string)
 	if id == "" {
-		id = fmt.Sprintf("route-%d", strings.ReplaceAll(fmt.Sprintf("%d", time.Now().UnixNano()), "-", ""))
+		id = fmt.Sprintf("route-%d", time.Now().UnixNano())
 	}
 
 	err = client.Create(ctx, "routes", id, route)

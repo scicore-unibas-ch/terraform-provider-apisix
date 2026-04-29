@@ -275,7 +275,7 @@ func resourceApisixUpstreamCreate(ctx context.Context, d *schema.ResourceData, m
 	upstream := expandUpstream(d)
 	id := d.Get("name").(string)
 	if id == "" {
-		id = fmt.Sprintf("upstream-%d", fmt.Sprintf("%d", time.Now().UnixNano()))
+		id = fmt.Sprintf("upstream-%d", time.Now().UnixNano())
 	}
 
 	err = client.Create(ctx, "upstreams", id, upstream)
