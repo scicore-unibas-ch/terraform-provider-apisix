@@ -32,22 +32,11 @@ jobs:
       # -----------------------------------------------------------------------
       # Start the APISIX cluster from pre-built Docker images
       # -----------------------------------------------------------------------
-      - name: Start APISIX cluster
+      - name: Start APISIX cluster (initial)
         working-directory: tests/
         run: |
           docker compose up -d
-
-      - name: Wait for etcd to be ready
-        run: |
-          echo "Waiting for etcd..."
-          for i in $(seq 1 30); do
-            if docker exec tests-etcd-1 etcdctl endpoint health &>/dev/null; then
-              echo "etcd ready."
-              break
-            fi
-            echo "  attempt $i/30 — sleeping 5s"
-            sleep 5
-          done
+          sleep 10
 
       - name: Wait for APISIX to be ready
         run: |
@@ -60,12 +49,6 @@ jobs:
             echo "  attempt $i/60 — sleeping 5s"
             sleep 5
           done
-          # Final verification
-          curl -s http://localhost:9180/apisix/admin/routes -H "X-API-KEY: test123456789" | jq -r '.total // empty' || echo "Warning: APISIX may not be fully ready"
-
-      - name: Print APISIX version
-        run: |
-          docker exec tests-apisix-1 apisix version
 
       # -----------------------------------------------------------------------
       # Build the provider and run acceptance tests
@@ -87,6 +70,7 @@ jobs:
           echo "TF_CLI_CONFIG_FILE=/tmp/dev.tofurc" >> $GITHUB_ENV
 
       # Run acceptance tests for each resource
+      # Each test restarts APISIX for a clean state
       - name: Run upstream acceptance tests
         run: |
           export TF_CLI_CONFIG_FILE=/tmp/dev.tofurc
