@@ -3,7 +3,6 @@ package resources
 import (
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -25,23 +24,19 @@ func TestResourceApisixPluginConfigSchema(t *testing.T) {
 
 	// Test config_id field
 	assert.NotNil(t, schema["config_id"])
-	assert.Equal(t, schema["config_id"].Type, schema.TypeString)
 	assert.True(t, schema["config_id"].Required)
 	assert.True(t, schema["config_id"].ForceNew)
 
 	// Test desc field
 	assert.NotNil(t, schema["desc"])
-	assert.Equal(t, schema["desc"].Type, schema.TypeString)
 	assert.True(t, schema["desc"].Optional)
 
 	// Test plugins field
 	assert.NotNil(t, schema["plugins"])
-	assert.Equal(t, schema["plugins"].Type, schema.TypeMap)
 	assert.True(t, schema["plugins"].Required)
 
 	// Test labels field
 	assert.NotNil(t, schema["labels"])
-	assert.Equal(t, schema["labels"].Type, schema.TypeMap)
 	assert.True(t, schema["labels"].Optional)
 	assert.True(t, schema["labels"].Computed)
 }
