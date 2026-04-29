@@ -26,8 +26,8 @@ services:
       - "9443:9443"  # HTTPS
       - "9091:9091"  # Prometheus
     healthcheck:
-      test: ["CMD", "curl", "-f", "-H", "X-API-KEY: test123456789", "http://localhost:9180/apisix/admin/routes"]
+      test: ["CMD-SHELL", "apisix healthcheck 2>/dev/null || (curl -f -s -o /dev/null -w '%{http_code}' -H 'X-API-KEY: test123456789' http://127.0.0.1:9180/apisix/admin/ | grep -q '200')"]
       interval: 5s
       timeout: 5s
       retries: 10
-      start_period: 10s
+      start_period: 15s
