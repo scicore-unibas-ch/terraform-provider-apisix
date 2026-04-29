@@ -96,6 +96,27 @@ resource "apisix_service" "with_labels" {
 }
 ```
 
+### Service with Custom Lua Script
+
+```hcl
+resource "apisix_service" "with_script" {
+  name = "service-with-script"
+  desc = "Service with custom Lua script"
+
+  # Script must be a valid Lua module string
+  # Note: Conflicts with `plugins` field
+  script = <<-EOT
+local _M = {}
+function _M.access(conf, ctx)
+    ngx.header["X-Custom-Header"] = "CustomValue"
+end
+return _M
+EOT
+
+  upstream_id = apisix_upstream.backend.id
+}
+```
+
 ### Complete Service with All Fields
 
 ```hcl
@@ -151,7 +172,7 @@ The following arguments are supported:
 - `desc` - (Optional) Description of the service.
 - `hosts` - (Optional) List of hosts to match.
 - `plugins` - (Optional) Plugin configurations as a map of JSON-encoded strings. Conflicts with `script`.
-- `script` - (Optional) Lua script for custom logic. Conflicts with `plugins`.
+- `script` - (Optional) Lua script for custom logic. Must be a valid Lua module string. Conflicts with `plugins`.
 - `upstream_id` - (Optional) ID of the upstream resource. Conflicts with `upstream`.
 - `upstream` - (Optional) Inline upstream configuration block. Conflicts with `upstream_id`.
   - `type` - (Optional) Load balancing type. Defaults to `roundrobin`.

@@ -101,6 +101,23 @@ resource "apisix_service" "with_labels" {
   }
 }
 
+# Service with script (custom Lua logic)
+resource "apisix_service" "with_script" {
+  name = "service-with-script"
+  desc = "Service with custom Lua script"
+
+  # Script must be a valid Lua module string
+  script = <<-EOT
+local _M = {}
+function _M.access(conf, ctx)
+    ngx.header["X-Custom-Header"] = "CustomValue"
+end
+return _M
+EOT
+
+  upstream_id = apisix_upstream.test.id
+}
+
 # Shared upstream for services
 resource "apisix_upstream" "test" {
   name = "service-test-upstream"

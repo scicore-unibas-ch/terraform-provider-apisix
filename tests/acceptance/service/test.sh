@@ -41,12 +41,12 @@ echo "Executing: tofu init -input=false"
 tofu init -input=false
 
 # Test 1: Create all services
-log_info "Test 1: Create services (basic, with_hosts, with_plugins, with_upstream, with_labels)"
+log_info "Test 1: Create services (basic, with_hosts, with_plugins, with_upstream, with_labels, with_script)"
 echo "Executing: tofu apply -auto-approve -lock=false"
 tofu apply -auto-approve -lock=false
 
 # Verify all services were created
-for resource in basic with_hosts with_plugins with_upstream with_labels; do
+for resource in basic with_hosts with_plugins with_upstream with_labels with_script; do
     SERVICE_ID=$(tofu state show apisix_service.$resource 2>&1 | grep '^\s*id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
     if [ -z "$SERVICE_ID" ]; then
         log_error "Failed to get service ID for $resource"
@@ -105,6 +105,14 @@ WEBSOCKET=$(echo "$RESPONSE" | jq -r '.value.enable_websocket')
 [ "$LABELS_COUNT" = "3" ] || { log_error "with_labels service labels mismatch: got $LABELS_COUNT"; exit 1; }
 [ "$WEBSOCKET" = "true" ] || { log_error "with_labels service websocket mismatch: got $WEBSOCKET"; exit 1; }
 
+# Verify with_script service
+WITH_SCRIPT_ID=$(tofu state show apisix_service.with_script 2>/dev/null | grep '^\s*id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
+RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/services/$WITH_SCRIPT_ID" -H "X-API-KEY: test123456789")
+SCRIPT=$(echo "$RESPONSE" | jq -r '.value.script')
+if [ -z "$SCRIPT" ] || [ "$SCRIPT" = "null" ]; then
+    log_error "with_script service script is empty or null"
+    exit 1
+fi
 log_info "✓ Service configurations verified"
 
 # Test 4: Destroy all services
@@ -113,7 +121,7 @@ echo "Executing: tofu destroy -auto-approve -lock=false"
 tofu destroy -auto-approve -lock=false
 
 # Verify all services were deleted
-for resource in basic with_hosts with_plugins with_upstream with_labels; do
+for resource in basic with_hosts with_plugins with_upstream with_labels with_script; do
     SERVICE_ID=$(tofu state show apisix_service.$resource 2>/dev/null | grep "^ *id *" | cut -d'"' -f2 || echo "")
     if [ -n "$SERVICE_ID" ]; then
         RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/services/$SERVICE_ID" \
@@ -131,7 +139,7 @@ log_info "Test 5: Recreate services"
 echo "Executing: tofu apply -auto-approve -lock=false"
 tofu apply -auto-approve -lock=false
 
-for resource in basic with_hosts with_plugins with_upstream with_labels; do
+for resource in basic with_hosts with_plugins with_upstream with_labels with_script; do
     SERVICE_ID=$(tofu state show apisix_service.$resource 2>/dev/null | grep "^ *id *" | cut -d'"' -f2)
     if [ -z "$SERVICE_ID" ]; then
         log_error "Failed to get service ID for $resource after recreation"
@@ -142,7 +150,7 @@ log_info "✓ All services recreated successfully"
 
 # Test 6: Import test for all services
 log_info "Test 6: Import test"
-for resource in basic with_hosts with_plugins with_upstream with_labels; do
+for resource in basic with_hosts with_plugins with_upstream with_labels with_script; do
     SERVICE_ID=$(tofu state show apisix_service.$resource 2>/dev/null | grep '^\s*id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
     
     # Remove from state
