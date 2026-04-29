@@ -54,64 +54,37 @@ jobs:
       # Build the provider and run acceptance tests
       # -----------------------------------------------------------------------
       - name: Build provider binary
-        run: go build -o /tmp/terraform-provider-apisix .
-
-      - name: Configure dev_overrides
-        run: |
-          cat > /tmp/dev.tofurc <<EOF
-          provider_installation {
-            dev_overrides {
-              "scicore-unibas-ch/apisix" = "/tmp"
-            }
-            direct {}
-          }
-          EOF
-          export TF_CLI_CONFIG_FILE=/tmp/dev.tofurc
-          echo "TF_CLI_CONFIG_FILE=/tmp/dev.tofurc" >> $GITHUB_ENV
+        run: go build -o terraform-provider-apisix .
 
       # Run acceptance tests for each resource
-      # Each test restarts APISIX for a clean state
+      # Each test creates its own .tofurc and restarts APISIX for clean state
       - name: Run upstream acceptance tests
-        run: |
-          export TF_CLI_CONFIG_FILE=/tmp/dev.tofurc
-          cd tests/acceptance/upstream
-          ./test.sh
+        working-directory: tests/acceptance/upstream
+        run: ./test.sh
 
       - name: Run route acceptance tests
-        run: |
-          export TF_CLI_CONFIG_FILE=/tmp/dev.tofurc
-          cd tests/acceptance/route
-          ./test.sh
+        working-directory: tests/acceptance/route
+        run: ./test.sh
 
       - name: Run service acceptance tests
-        run: |
-          export TF_CLI_CONFIG_FILE=/tmp/dev.tofurc
-          cd tests/acceptance/service
-          ./test.sh
+        working-directory: tests/acceptance/service
+        run: ./test.sh
 
       - name: Run consumer acceptance tests
-        run: |
-          export TF_CLI_CONFIG_FILE=/tmp/dev.tofurc
-          cd tests/acceptance/consumer
-          ./test.sh
+        working-directory: tests/acceptance/consumer
+        run: ./test.sh
 
       - name: Run consumer_group acceptance tests
-        run: |
-          export TF_CLI_CONFIG_FILE=/tmp/dev.tofurc
-          cd tests/acceptance/consumer_group
-          ./test.sh
+        working-directory: tests/acceptance/consumer_group
+        run: ./test.sh
 
       - name: Run plugin_config acceptance tests
-        run: |
-          export TF_CLI_CONFIG_FILE=/tmp/dev.tofurc
-          cd tests/acceptance/plugin_config
-          ./test.sh
+        working-directory: tests/acceptance/plugin_config
+        run: ./test.sh
 
       - name: Run global_rule acceptance tests
-        run: |
-          export TF_CLI_CONFIG_FILE=/tmp/dev.tofurc
-          cd tests/acceptance/global_rule
-          ./test.sh
+        working-directory: tests/acceptance/global_rule
+        run: ./test.sh
 
       # SSL tests are skipped due to SSL proxy configuration complexity
       # They can be enabled later when needed
