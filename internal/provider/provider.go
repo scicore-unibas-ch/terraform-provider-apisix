@@ -39,6 +39,7 @@ func Provider() *schema.Provider {
 			"apisix_consumer":       resources.ResourceApisixConsumer(),
 			"apisix_consumer_group": resources.ResourceApisixConsumerGroup(),
 			"apisix_ssl":            resources.ResourceApisixSSL(),
+			"apisix_plugin_config":  resources.ResourceApisixPluginConfig(),
 		},
 		ConfigureContextFunc: providerConfigure,
 	}
