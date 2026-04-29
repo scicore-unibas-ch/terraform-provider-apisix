@@ -70,7 +70,7 @@ Each resource tested for:
 
 ### Run All Unit Tests
 ```bash
-cd /home/escobar/github/terraform-provider-apisix
+cd <path-to-repo>
 go test ./internal/resources/... -v
 ```
 

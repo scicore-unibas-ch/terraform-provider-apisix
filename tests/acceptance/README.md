@@ -156,7 +156,7 @@ Ensure `~/.tofurc` contains:
 ```hcl
 provider_installation {
   dev_overrides {
-    "scicore-unibas-ch/apisix" = "/home/escobar/github/terraform-provider-apisix"
+    "scicore-unibas-ch/apisix" = "$REPO_ROOT"
   }
   direct {}
 }
