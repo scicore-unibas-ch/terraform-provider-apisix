@@ -30,7 +30,7 @@ log_warn() {
 cleanup() {
     if [ "$CLEANUP_ON_FAILURE" = "true" ] || [ $? -eq 0 ]; then
         log_info "Cleaning up..."
-        tofu destroy -auto-approve -lock=false 2>/dev/null ||        for id in test-upstream-basic test-upstream-complex test-upstream-medium; do curl -s -X DELETE "http://localhost:9180/apisix/admin/upstreams/$id" -H "X-API-KEY: test123456789" > /dev/null 2>&1 ||; done
+        tofu destroy -auto-approve -lock=false 2>/dev/null || true
     else
         log_warn "Leaving resources for debugging (set CLEANUP_ON_FAILURE=true to auto-cleanup)"
     fi
@@ -52,7 +52,6 @@ sleep 8
 cd - >/dev/null
 
 # Wait for APISIX to be ready
-log_info "Waiting for APISIX to be ready..."
 for i in {1..60}; do
     if curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/" \
         -H "X-API-KEY: test123456789" | grep -q "200"; then
@@ -61,6 +60,11 @@ for i in {1..60}; do
     fi
     sleep 1
 done
+
+# Initial cleanup
+log_info "Cleaning up any existing state and APISIX resources..."
+tofu destroy -auto-approve -lock=false 2>/dev/null || true
+
 
 # Test 1: Create all upstreams
 log_info "Test 1: Create upstreams (basic, medium, complex)"

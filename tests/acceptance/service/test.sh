@@ -27,7 +27,8 @@ log_warn() {
 cleanup() {
     if [ "$CLEANUP_ON_FAILURE" = "true" ] || [ $? -eq 0 ]; then
         log_info "Cleaning up..."
-        tofu destroy -auto-approve -lock=false 2>/dev/null ||        for id in service-test-upstream; do curl -s -X DELETE "http://localhost:9180/apisix/admin/services/$id" -H "X-API-KEY: test123456789" > /dev/null 2>&1 ||; done
+        tofu destroy -auto-approve -lock=false 2>/dev/null || true
+        for id in service-test-upstream; do curl -s -X DELETE "http://localhost:9180/apisix/admin/services/$id" -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true; done
     else
         log_warn "Leaving resources for debugging (set CLEANUP_ON_FAILURE=true to auto-cleanup)"
     fi
@@ -49,7 +50,6 @@ sleep 8
 cd - >/dev/null
 
 # Wait for APISIX to be ready
-log_info "Waiting for APISIX to be ready..."
 for i in {1..60}; do
     if curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/" \
         -H "X-API-KEY: test123456789" | grep -q "200"; then
@@ -58,6 +58,12 @@ for i in {1..60}; do
     fi
     sleep 1
 done
+
+# Initial cleanup
+log_info "Cleaning up any existing state and APISIX resources..."
+tofu destroy -auto-approve -lock=false 2>/dev/null || true
+    for id in service-test-upstream; do curl -s -X DELETE "http://localhost:9180/apisix/admin/services/$id" -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true; done
+
 
 # Test 1: Create all services
 log_info "Test 1: Create services (basic, with_hosts, with_plugins, with_upstream, with_labels, with_script)"
