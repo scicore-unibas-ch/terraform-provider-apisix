@@ -1,0 +1,31 @@
+services:
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.9
+    command: etcd --advertise-client-urls http://0.0.0.0:2379 --listen-client-urls http://0.0.0.0:2379
+    ports:
+      - "2379:2379"
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  apisix:
+    image: apache/apisix:3.16.0-debian
+    depends_on:
+      etcd:
+        condition: service_healthy
+    environment:
+      - APISIX_STAND_ALONE=false
+    volumes:
+      - ./apisix/config.yaml:/usr/local/apisix/conf/config.yaml:ro
+    ports:
+      - "9180:9180"  # Admin API
+      - "9080:9080"  # HTTP
+      - "9443:9443"  # HTTPS
+      - "9091:9091"  # Prometheus
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9080"]
+      interval: 5s
+      timeout: 3s
+      retries: 3

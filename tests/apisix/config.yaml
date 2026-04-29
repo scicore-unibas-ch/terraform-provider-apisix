@@ -1,0 +1,17 @@
+deployment:
+  admin:
+    admin_key:
+      - name: admin
+        key: test123456789
+        role: admin
+    allow_admin:
+      - 0.0.0.0/0
+    admin_listen:
+      ip: 0.0.0.0
+      port: 9180
+
+  etcd:
+    host:
+      - "http://etcd:2379"
+    prefix: "/apisix"
+    timeout: 30
