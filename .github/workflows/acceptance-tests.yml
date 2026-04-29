@@ -1,0 +1,132 @@
+name: Acceptance Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  acceptance:
+    name: Acceptance Tests (APISIX ${{ matrix.apisix_version }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - apisix_version: "3.16.0"
+            etcd_version: "3.5.9"
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: opentofu/setup-opentofu@v2
+
+      # -----------------------------------------------------------------------
+      # Start the APISIX cluster from pre-built Docker images
+      # -----------------------------------------------------------------------
+      - name: Start APISIX cluster
+        working-directory: tests/
+        run: |
+          docker compose up -d
+
+      - name: Wait for APISIX to be ready
+        run: |
+          echo "Waiting for APISIX Admin API..."
+          for i in $(seq 1 36); do
+            if curl -sf http://localhost:9180/apisix/admin/routes &>/dev/null; then
+              echo "APISIX ready."
+              break
+            fi
+            echo "  attempt $i/36 — sleeping 5s"
+            sleep 5
+          done
+
+      - name: Print APISIX version
+        run: |
+          docker exec tests-apisix-1 apisix version
+
+      # -----------------------------------------------------------------------
+      # Build the provider and run acceptance tests
+      # -----------------------------------------------------------------------
+      - name: Build provider binary
+        run: go build -o /tmp/terraform-provider-apisix .
+
+      - name: Configure dev_overrides
+        run: |
+          cat > /tmp/dev.tofurc <<EOF
+          provider_installation {
+            dev_overrides {
+              "scicore/apisix" = "/tmp"
+            }
+            direct {}
+          }
+          EOF
+
+      # Run acceptance tests for each resource
+      - name: Run upstream acceptance tests
+        env:
+          TF_CLI_CONFIG_FILE: /tmp/dev.tofurc
+        run: |
+          cd tests/acceptance/upstream
+          ./test.sh
+
+      - name: Run route acceptance tests
+        env:
+          TF_CLI_CONFIG_FILE: /tmp/dev.tofurc
+        run: |
+          cd tests/acceptance/route
+          ./test.sh
+
+      - name: Run service acceptance tests
+        env:
+          TF_CLI_CONFIG_FILE: /tmp/dev.tofurc
+        run: |
+          cd tests/acceptance/service
+          ./test.sh
+
+      - name: Run consumer acceptance tests
+        env:
+          TF_CLI_CONFIG_FILE: /tmp/dev.tofurc
+        run: |
+          cd tests/acceptance/consumer
+          ./test.sh
+
+      - name: Run consumer_group acceptance tests
+        env:
+          TF_CLI_CONFIG_FILE: /tmp/dev.tofurc
+        run: |
+          cd tests/acceptance/consumer_group
+          ./test.sh
+
+      - name: Run plugin_config acceptance tests
+        env:
+          TF_CLI_CONFIG_FILE: /tmp/dev.tofurc
+        run: |
+          cd tests/acceptance/plugin_config
+          ./test.sh
+
+      - name: Run global_rule acceptance tests
+        env:
+          TF_CLI_CONFIG_FILE: /tmp/dev.tofurc
+        run: |
+          cd tests/acceptance/global_rule
+          ./test.sh
+
+      # SSL tests are skipped due to SSL proxy configuration complexity
+      # They can be enabled later when needed
+
+      # -----------------------------------------------------------------------
+      # Cleanup
+      # -----------------------------------------------------------------------
+      - name: Stop APISIX cluster
+        if: always()
+        working-directory: tests/
+        run: docker compose down -v
