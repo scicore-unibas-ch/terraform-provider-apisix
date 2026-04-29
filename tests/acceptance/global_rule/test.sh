@@ -37,8 +37,8 @@ trap cleanup EXIT
 
 # Initialize
 log_info "Initializing Terraform..."
-echo "Executing: tofu init -input=false"
-tofu init -input=false
+# echo "Executing: tofu init -input=false"
+# tofu init -input=false
 
 # Test 1: Create all global rules
 log_info "Test 1: Create global rules (basic, multi_plugins, ip_restriction, route_integration)"

@@ -49,8 +49,8 @@ log_info "✓ APISIX SSL proxy is enabled"
 
 # Initialize
 log_info "Initializing Terraform..."
-echo "Executing: tofu init -input=false"
-tofu init -input=false
+# echo "Executing: tofu init -input=false"
+# tofu init -input=false
 
 # Test 1: Create all SSL certificates
 log_info "Test 1: Create SSL certificates (basic, multi_sni, tls13, with_labels)"

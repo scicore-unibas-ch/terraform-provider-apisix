@@ -37,8 +37,8 @@ trap cleanup EXIT
 
 # Initialize
 log_info "Initializing Terraform..."
-echo "Executing: tofu init -input=false"
-tofu init -input=false
+# echo "Executing: tofu init -input=false"
+# tofu init -input=false
 
 # Test 1: Create all consumers
 log_info "Test 1: Create consumers (basic, key_auth, jwt_auth, with_labels, hmac_auth, with_group)"
