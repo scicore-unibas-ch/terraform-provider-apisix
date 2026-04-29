@@ -90,3 +90,8 @@ resource "apisix_route" "with_global_rule" {
   upstream_id = apisix_upstream.test.id
   status      = 1
 }
+
+provider "apisix" {
+  base_url  = var.apisix_base_url
+  admin_key = var.apisix_admin_key
+}
