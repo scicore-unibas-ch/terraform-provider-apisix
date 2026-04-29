@@ -31,6 +31,13 @@ cleanup() {
         tofu destroy -auto-approve -lock=false 2>/dev/null || true
         for id in service-test-upstream; do curl -s -X DELETE "http://localhost:9180/apisix/admin/services/$id" -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true; done
     else
+
+        # Force cleanup via API (in case state is corrupted)
+        log_info "Force cleaning service via API..."
+        for rid in service-test-upstream; do
+            curl -s -X DELETE "http://localhost:9180/apisix/admin/services/$rid" \
+                -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true
+        done
         log_warn "Leaving resources for debugging (set CLEANUP_ON_FAILURE=true to auto-cleanup)"
     fi
 }

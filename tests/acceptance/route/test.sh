@@ -31,6 +31,13 @@ cleanup() {
         tofu destroy -auto-approve -lock=false 2>/dev/null || true
         for id in route-test-upstream test-route-advanced test-route-basic test-route-complete test-route-with-script test-route-with-vars; do curl -s -X DELETE "http://localhost:9180/apisix/admin/routes/$id" -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true; done
     else
+
+        # Force cleanup via API (in case state is corrupted)
+        log_info "Force cleaning route via API..."
+        for rid in route-test-upstream test-route-basic test-route-advanced test-route-with-vars test-route-complete test-route-with-script; do
+            curl -s -X DELETE "http://localhost:9180/apisix/admin/routes/$rid" \
+                -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true
+        done
         log_warn "Leaving resources for debugging (set CLEANUP_ON_FAILURE=true to auto-cleanup)"
     fi
 }

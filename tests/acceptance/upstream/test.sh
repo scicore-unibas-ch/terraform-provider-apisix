@@ -32,6 +32,13 @@ cleanup() {
         rm -f .tofurc terraform.tfstate* terraform.tfstate.backup 2>/dev/null || true
         rm -rf .terraform* 2>/dev/null || true
     else
+
+        # Force cleanup via API (in case state is corrupted)
+        log_info "Force cleaning upstream via API..."
+        for rid in test-upstream-basic test-upstream-medium test-upstream-complex; do
+            curl -s -X DELETE "http://localhost:9180/apisix/admin/upstreams/$rid" \
+                -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true
+        done
         log_warn "Leaving resources for debugging (set CLEANUP_ON_FAILURE=true to auto-cleanup)"
     fi
 }
