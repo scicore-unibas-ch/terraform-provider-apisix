@@ -91,21 +91,19 @@ You can test the provider locally using the provided Makefile:
 # Run unit tests
 make test
 
-# Run acceptance tests (requires Docker Compose)
-cd tests/
-docker compose up -d  # Start APISIX cluster
+# Run all acceptance tests (requires Docker Compose)
+make test-env-up        # Start APISIX cluster
+make test-acceptance    # Run all acceptance tests
+make test-env-down      # Stop cluster
 
-# Then run individual test suites:
-cd acceptance/upstream && ./test.sh
-cd ../route && ./test.sh
-cd ../service && ./test.sh
-cd ../consumer && ./test.sh
-cd ../consumer_group && ./test.sh
-cd ../plugin_config && ./test.sh
-cd ../global_rule && ./test.sh
-
-# Cleanup when done
-docker compose down
+# Run specific acceptance test
+make test-acceptance-single TEST=upstream
+make test-acceptance-single TEST=route
+make test-acceptance-single TEST=service
+make test-acceptance-single TEST=consumer
+make test-acceptance-single TEST=consumer_group
+make test-acceptance-single TEST=plugin_config
+make test-acceptance-single TEST=global_rule
 ```
 
 **Note:** The acceptance tests workflow in GitHub Actions uses Docker Compose automatically, so tests that pass locally should pass in CI.
