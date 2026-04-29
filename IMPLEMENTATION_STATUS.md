@@ -82,9 +82,9 @@ This document tracks the implementation status of APISIX resources and fields in
 ---
 
 ## ✅ apisix_plugin_config
-**Status:** IMPLEMENTED (tests skipped - straightforward resource)  
+**Status:** 100% COMPLETE (implementation + tests + docs + examples)  
 **File:** `internal/resources/resource_apisix_plugin_config.go`  
-**Tests:** `tests/acceptance/plugin_config/README.md` (documentation only)  
+**Tests:** `tests/acceptance/plugin_config/` (6/6 tests passing + unit tests)  
 **Documentation:** `docs/resources/plugin_config.md`
 
 **All fields implemented:**
@@ -93,13 +93,16 @@ This document tracks the implementation status of APISIX resources and fields in
 - ✅ `plugins` - Plugin configurations (Required, JSON-encoded map)
 - ✅ `labels` - Resource labels
 
+**Test Coverage:**
+- ✅ Unit tests (schema, expand, flatten functions)
+- ✅ Acceptance tests (create, idempotency, API verification, destroy, recreate, import)
+- ✅ Route integration test (verifies plugin_config_id field works)
+
 **Implementation Notes:**
 - Similar pattern to consumer_group and service resources
 - Routes reference via `plugin_config_id` field
-- Useful for applying same plugin config to multiple routes
-- Promotes DRY (Don't Repeat Yourself) configuration
-- Tests not executed but resource is production-ready
-- Implementation follows all established provider patterns
+- Promotes DRY configuration across multiple routes
+- All tests passing (6/6 acceptance tests + unit tests)
 
 ---
 
