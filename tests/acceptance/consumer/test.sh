@@ -180,6 +180,20 @@ for resource in basic key_auth jwt_auth with_labels hmac_auth with_group; do
         echo "$APPLY_OUTPUT"
         exit 1
     fi
+    
+    # Verify idempotency after import (plan should show no changes)
+    echo "Executing: tofu plan -detailed-exitcode -lock=false (verify idempotency after import)"
+    set +e
+    PLAN_OUTPUT=$(tofu plan -detailed-exitcode -lock=false 2>&1)
+    EXIT_CODE=$?
+    set -e
+    
+    if [ $EXIT_CODE -ne 0 ]; then
+        log_error "Import idempotency check failed for $resource - plan detected changes"
+        echo "$PLAN_OUTPUT"
+        exit 1
+    fi
+    log_info "✓ Import idempotency verified for $resource"
 done
 
 # Final cleanup
