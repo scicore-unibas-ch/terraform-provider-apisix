@@ -157,6 +157,7 @@ func ResourceApisixUpstream() *schema.Resource {
 			"labels": {
 				Type:        schema.TypeMap,
 				Optional:    true,
+				Computed:    true,
 				Elem:        &schema.Schema{Type: schema.TypeString},
 				Description: "Labels for the upstream as key-value pairs.",
 			},
@@ -501,9 +502,10 @@ func expandTLS(tls []interface{}) map[string]interface{} {
 func flattenUpstream(d *schema.ResourceData, value interface{}) diag.Diagnostics {
 	data, ok := value.(map[string]interface{})
 	if !ok {
-		return diag.Errorf("failed to convert upstream data")
+		return diag.Errorf("failed to convert upstream data: got %T, expected map[string]interface{}", value)
 	}
 
+	// Set simple fields
 	d.Set("name", data["name"])
 	d.Set("desc", data["desc"])
 	d.Set("type", data["type"])
@@ -517,14 +519,22 @@ func flattenUpstream(d *schema.ResourceData, value interface{}) diag.Diagnostics
 	d.Set("retries", data["retries"])
 	d.Set("retry_timeout", data["retry_timeout"])
 
-	if labelsRaw, ok := data["labels"].(map[string]interface{}); ok {
-		labels := make(map[string]string)
-		for k, v := range labelsRaw {
-			if vStr, ok := v.(string); ok {
-				labels[k] = vStr
+	// Set labels
+	labelsRaw := data["labels"]
+	if labelsRaw != nil {
+		if labelsMap, ok := labelsRaw.(map[string]interface{}); ok {
+			labels := make(map[string]string)
+			for k, v := range labelsMap {
+				if str, ok := v.(string); ok {
+					labels[k] = str
+				}
+			}
+			if len(labels) > 0 {
+				if err := d.Set("labels", labels); err != nil {
+					return diag.Errorf("error setting labels: %s", err)
+				}
 			}
 		}
-		d.Set("labels", labels)
 	}
 
 	if nodes, ok := data["nodes"].([]interface{}); ok {
