@@ -18,48 +18,37 @@ variable "apisix_admin_key" {
   sensitive = true
 }
 
-provider "apisix" {
-  base_url  = var.apisix_base_url
-  admin_key = var.apisix_admin_key
-  timeout   = 30
+locals {
+  cert_dir = "${path.module}/certs"
 }
 
 # Basic SSL certificate
 resource "apisix_ssl" "basic" {
-  sni  = "example.com"
-  cert = file("${path.module}/example.com.crt")
-  key  = file("${path.module}/example.com.key")
+  sni   = "example.com"
+  cert  = file("${local.cert_dir}/example.com.crt")
+  key   = file("${local.cert_dir}/example.com.key")
 }
 
-# SSL with multiple SNIs
-resource "apisix_ssl" "multi_sni" {
-  snis = ["api.example.com", "www.example.com"]
-  cert = file("${path.module}/example.com.crt")
-  key  = file("${path.module}/example.com.key")
-
-  ssl_protocols = ["TLSv1.2", "TLSv1.3"]
+# SSL certificate for secure.example.com
+resource "apisix_ssl" "secure" {
+  sni   = "secure.example.com"
+  cert  = file("${local.cert_dir}/secure.example.com.crt")
+  key   = file("${local.cert_dir}/secure.example.com.key")
 }
 
-# SSL with TLS 1.3 only
-resource "apisix_ssl" "tls13" {
-  sni  = "secure.example.com"
-  cert = file("${path.module}/example.com.crt")
-  key  = file("${path.module}/example.com.key")
-
-  ssl_protocols = ["TLSv1.3"]
-}
-
-# SSL with labels
+# SSL certificate with labels
 resource "apisix_ssl" "with_labels" {
-  sni  = "labeled.example.com"
-  cert = file("${path.module}/example.com.crt")
-  key  = file("${path.module}/example.com.key")
-
-  ssl_protocols = ["TLSv1.2", "TLSv1.3"]
-
+  sni   = "labeled.example.com"
+  cert  = file("${local.cert_dir}/labeled.example.com.crt")
+  key   = file("${local.cert_dir}/labeled.example.com.key")
   labels = {
     env        = "production"
-    team       = "platform"
     managed-by = "terraform"
+    team       = "platform"
   }
+}
+
+provider "apisix" {
+  base_url  = var.apisix_base_url
+  admin_key = var.apisix_admin_key
 }
