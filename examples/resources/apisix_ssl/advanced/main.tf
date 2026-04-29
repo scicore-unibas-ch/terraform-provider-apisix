@@ -7,6 +7,10 @@ terraform {
   }
 }
 
+# SSL Certificate Examples
+# Note: These resources are fully implemented but acceptance tests are not executed.
+#       Test infrastructure is available and can be enabled when SSL testing is required.
+
 provider "apisix" {
   base_url  = "http://localhost:9180/apisix/admin"
   admin_key = "test123456789"

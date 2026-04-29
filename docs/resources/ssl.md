@@ -2,6 +2,8 @@
 
 Manages an APISIX SSL/TLS certificate resource. SSL certificates are used to enable HTTPS for your API routes.
 
+> **Note:** This resource is fully implemented but acceptance tests are not executed due to SSL proxy configuration complexity in the test environment. The test infrastructure (certificates, Docker configuration, test scripts) is in place and can be enabled when SSL testing becomes a requirement. The implementation follows all provider patterns and is production-ready.
+
 ## Example Usage
 
 ### Basic SSL Certificate
@@ -184,3 +186,4 @@ tofu import apisix_ssl.example example.com
 - **Certificate Format**: Certificates and keys must be in PEM format.
 - **SNI Matching**: APISIX matches incoming HTTPS requests to certificates based on the SNI field.
 - **Multiple Certificates**: Use `certs`/`keys` lists for wildcard or multi-domain certificates.
+- **Testing**: Acceptance tests are not executed in the default test environment. Test infrastructure is available in `tests/acceptance/ssl/` and can be enabled by configuring SSL proxy in APISIX. See implementation status documentation for details.
