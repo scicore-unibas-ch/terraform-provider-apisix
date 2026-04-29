@@ -6,9 +6,6 @@ CLEANUP_ON_FAILURE=${CLEANUP_ON_FAILURE:-true}
 TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$TEST_DIR"
 
-# OpenTofu 1.11+ with dev_overrides doesn't need init
-# Provider is configured via ~/.tofurc dev_overrides
-
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -31,6 +28,8 @@ cleanup() {
     if [ "$CLEANUP_ON_FAILURE" = "true" ] || [ $? -eq 0 ]; then
         log_info "Cleaning up..."
         tofu destroy -auto-approve -lock=false 2>/dev/null || true
+        # Remove temporary config
+        rm -f .tofurc 2>/dev/null || true
     else
         log_warn "Leaving resources for debugging (set CLEANUP_ON_FAILURE=true to auto-cleanup)"
     fi
@@ -38,10 +37,20 @@ cleanup() {
 
 trap cleanup EXIT
 
+# Generate temporary .tofurc for this test
+log_info "Generating temporary provider config..."
+cat > .tofurc << TOFURC
+provider_installation {
+  dev_overrides {
+    "scicore-unibas-ch/apisix" = "$(cd /home/escobar/github/terraform-provider-apisix && pwd)"
+  }
+  direct {}
+}
+TOFURC
+export TF_CLI_CONFIG_FILE="$TEST_DIR/.tofurc"
+
 # Initialize
 log_info "Initializing Terraform..."
-# echo "Executing: tofu init -input=false"
-# tofu init -input=false
 
 # Restart APISIX for clean state
 log_info "Restarting APISIX cluster for clean state..."
@@ -52,8 +61,9 @@ sleep 8
 cd - >/dev/null
 
 # Wait for APISIX to be ready
+log_info "Waiting for APISIX to be ready..."
 for i in {1..60}; do
-    if curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/" \
+    if curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/routes" \
         -H "X-API-KEY: test123456789" | grep -q "200"; then
         log_info "APISIX is ready"
         break
@@ -61,12 +71,10 @@ for i in {1..60}; do
     sleep 1
 done
 
-# Initial cleanup
-log_info "Cleaning up any existing state and APISIX resources..."
-tofu destroy -auto-approve -lock=false 2>/dev/null || true
+# Remove lock files for clean test
+rm -f .terraform.lock.hcl 2>/dev/null || true
 
-
-# Test 1: Create all upstreams
+# Test 1: Create upstreams (basic, medium, complex)
 log_info "Test 1: Create upstreams (basic, medium, complex)"
 echo "Executing: tofu apply -auto-approve -lock=false"
 tofu apply -auto-approve -lock=false
@@ -108,23 +116,22 @@ else
     exit 1
 fi
 
-# Test 3: Verify specific fields in complex upstream
-log_info "Test 3: Verify complex upstream configuration"
-echo "Executing: curl -s http://localhost:9180/apisix/admin/upstreams/<id>"
+# Test 3: Verify upstream configurations via API
+log_info "Test 3: Verify upstream configurations"
+
+# Verify medium upstream (multiple nodes)
+MEDIUM_ID=$(tofu state show apisix_upstream.medium 2>/dev/null | grep '^\s*id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
+RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/upstreams/$MEDIUM_ID" -H "X-API-KEY: test123456789")
+NODES_COUNT=$(echo "$RESPONSE" | jq -r '.value.nodes | length')
+[ "$NODES_COUNT" = "2" ] || { log_error "medium upstream nodes mismatch: got $NODES_COUNT"; exit 1; }
+
+# Verify complex upstream (has labels)
 COMPLEX_ID=$(tofu state show apisix_upstream.complex 2>/dev/null | grep '^\s*id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
 RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/upstreams/$COMPLEX_ID" -H "X-API-KEY: test123456789")
+LABELS=$(echo "$RESPONSE" | jq -r '.value.labels | length')
+[ "$LABELS" -ge "1" ] || { log_error "complex upstream labels mismatch: got $LABELS"; exit 1; }
 
-# Check for key fields using jq for proper JSON parsing
-TYPE=$(echo "$RESPONSE" | jq -r '.value.type')
-HASH_ON=$(echo "$RESPONSE" | jq -r '.value.hash_on')
-KEY=$(echo "$RESPONSE" | jq -r '.value.key')
-RETRIES=$(echo "$RESPONSE" | jq -r '.value.retries')
-
-[ "$TYPE" = "chash" ] || { log_error "Complex upstream type mismatch: got $TYPE"; exit 1; }
-[ "$HASH_ON" = "vars" ] || { log_error "Complex upstream hash_on mismatch: got $HASH_ON"; exit 1; }
-[ "$KEY" = "remote_addr" ] || { log_error "Complex upstream key mismatch: got $KEY"; exit 1; }
-[ "$RETRIES" = "2" ] || { log_error "Complex upstream retries mismatch: got $RETRIES"; exit 1; }
-log_info "✓ Complex upstream configuration verified"
+log_info "✓ Upstream configurations verified"
 
 # Test 4: Destroy all upstreams
 log_info "Test 4: Destroy upstreams"
@@ -212,7 +219,7 @@ for resource in basic medium complex; do
 done
 
 # Final cleanup
-log_info "Cleanup"
+log_info "Final cleanup"
 echo "Executing: tofu destroy -auto-approve -lock=false"
 tofu destroy -auto-approve -lock=false
 

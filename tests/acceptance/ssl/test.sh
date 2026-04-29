@@ -6,6 +6,30 @@ CLEANUP_ON_FAILURE=${CLEANUP_ON_FAILURE:-true}
 TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$TEST_DIR"
 
+# Generate temporary .tofurc for this test
+log_info "Generating temporary provider config..."
+cat > .tofurc << TOFURC
+provider_installation {
+  dev_overrides {
+    "scicore-unibas-ch/apisix" = "/home/escobar/github/terraform-provider-apisix"
+  }
+  direct {}
+}
+TOFURC
+export TF_CLI_CONFIG_FILE="$TEST_DIR/.tofurc"
+
+# Generate temporary .tofurc for this test
+log_info "Generating temporary provider config..."
+cat > .tofurc << TOFURC
+provider_installation {
+  dev_overrides {
+    "scicore-unibas-ch/apisix" = "/home/escobar/github/terraform-provider-apisix"
+  }
+  direct {}
+}
+TOFURC
+export TF_CLI_CONFIG_FILE="$TEST_DIR/.tofurc"
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -28,7 +52,7 @@ cleanup() {
     if [ "$CLEANUP_ON_FAILURE" = "true" ] || [ $? -eq 0 ]; then
         log_info "Cleaning up..."
         tofu destroy -auto-approve -lock=false 2>/dev/null || true
-        for id in example.com labeled.example.com secure.example.com; do curl -s -X DELETE "http://localhost:9180/apisix/admin/ssls/$id" -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true; done
+        for id in example.com labeled.example.com secure.example.com; do curl -s -X DELETE "http://localhost:9180/apisix/admin/routesssls/$id" -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true; done
     else
         log_warn "Leaving resources for debugging (set CLEANUP_ON_FAILURE=true to auto-cleanup)"
     fi
@@ -53,6 +77,12 @@ log_info "Initializing Terraform..."
 # echo "Executing: tofu init -input=false"
 # tofu init -input=false
 
+# Remove lock files for clean test
+rm -f .terraform.lock.hcl .tofurc 2>/dev/null || true
+
+# Remove lock files for clean test
+rm -f .terraform.lock.hcl .tofurc 2>/dev/null || true
+
 # Restart APISIX for clean state
 log_info "Restarting APISIX cluster for clean state..."
 cd ../../
@@ -63,7 +93,7 @@ cd - >/dev/null
 
 # Wait for APISIX to be ready
 for i in {1..60}; do
-    if curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/" \
+    if curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/routes" \
         -H "X-API-KEY: test123456789" | grep -q "200"; then
         log_info "APISIX is ready"
         break
@@ -74,7 +104,7 @@ done
 # Initial cleanup
 log_info "Cleaning up any existing state and APISIX resources..."
 tofu destroy -auto-approve -lock=false 2>/dev/null || true
-    for id in example.com labeled.example.com secure.example.com; do curl -s -X DELETE "http://localhost:9180/apisix/admin/ssls/$id" -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true; done
+    for id in example.com labeled.example.com secure.example.com; do curl -s -X DELETE "http://localhost:9180/apisix/admin/routesssls/$id" -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true; done
 
 
 # Test 1: Create all SSL certificates
@@ -93,11 +123,11 @@ for resource in basic multi_sni tls13 with_labels; do
     log_info "SSL certificate '$resource' created with SNI: $SSL_ID"
     
     # Verify via APISIX API
-    RESPONSE=$(curl -k -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/ssl/$SSL_ID" \
+    RESPONSE=$(curl -k -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/routesssl/$SSL_ID" \
         -H "X-API-KEY: test123456789")
     if [ "$RESPONSE" != "200" ]; then
         log_error "SSL certificate '$resource' not found in APISIX (HTTP $RESPONSE)"
-        curl -k -s "http://localhost:9180/apisix/admin/ssl/$SSL_ID" -H "X-API-KEY: test123456789" | head -20
+        curl -k -s "http://localhost:9180/apisix/admin/routesssl/$SSL_ID" -H "X-API-KEY: test123456789" | head -20
         exit 1
     fi
 done
@@ -124,13 +154,13 @@ log_info "Test 3: Verify SSL configurations"
 
 # Verify multi_sni certificate
 MULTI_SNI_ID=$(tofu state show apisix_ssl.multi_sni 2>/dev/null | grep '^\s*sni\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
-RESPONSE=$(curl -k -s "http://localhost:9180/apisix/admin/ssl/$MULTI_SNI_ID" -H "X-API-KEY: test123456789")
+RESPONSE=$(curl -k -s "http://localhost:9180/apisix/admin/routesssl/$MULTI_SNI_ID" -H "X-API-KEY: test123456789")
 SNIS_COUNT=$(echo "$RESPONSE" | jq -r '.value.snis | length')
 [ "$SNIS_COUNT" = "2" ] || { log_error "multi_sni certificate SNIs mismatch: got $SNIS_COUNT"; exit 1; }
 
 # Verify tls13 certificate
 TLS13_ID=$(tofu state show apisix_ssl.tls13 2>/dev/null | grep '^\s*sni\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
-RESPONSE=$(curl -k -s "http://localhost:9180/apisix/admin/ssl/$TLS13_ID" -H "X-API-KEY: test123456789")
+RESPONSE=$(curl -k -s "http://localhost:9180/apisix/admin/routesssl/$TLS13_ID" -H "X-API-KEY: test123456789")
 SSL_PROTOCOLS=$(echo "$RESPONSE" | jq -r '.value.ssl_protocols | length')
 [ "$SSL_PROTOCOLS" = "1" ] || { log_error "tls13 certificate ssl_protocols mismatch: got $SSL_PROTOCOLS"; exit 1; }
 PROTOCOL=$(echo "$RESPONSE" | jq -r '.value.ssl_protocols[0]')
@@ -138,7 +168,7 @@ PROTOCOL=$(echo "$RESPONSE" | jq -r '.value.ssl_protocols[0]')
 
 # Verify with_labels certificate
 WITH_LABELS_ID=$(tofu state show apisix_ssl.with_labels 2>/dev/null | grep '^\s*sni\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
-RESPONSE=$(curl -k -s "http://localhost:9180/apisix/admin/ssl/$WITH_LABELS_ID" -H "X-API-KEY: test123456789")
+RESPONSE=$(curl -k -s "http://localhost:9180/apisix/admin/routesssl/$WITH_LABELS_ID" -H "X-API-KEY: test123456789")
 LABELS_COUNT=$(echo "$RESPONSE" | jq -r '.value.labels | keys | length')
 [ "$LABELS_COUNT" = "3" ] || { log_error "with_labels certificate labels mismatch: got $LABELS_COUNT"; exit 1; }
 
@@ -153,7 +183,7 @@ tofu destroy -auto-approve -lock=false
 for resource in basic multi_sni tls13 with_labels; do
     SSL_ID=$(tofu state show apisix_ssl.$resource 2>/dev/null | grep "^ *sni *" | cut -d'"' -f2 || echo "")
     if [ -n "$SSL_ID" ]; then
-        RESPONSE=$(curl -k -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/ssl/$SSL_ID" \
+        RESPONSE=$(curl -k -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/routesssl/$SSL_ID" \
             -H "X-API-KEY: test123456789")
         if [ "$RESPONSE" != "404" ]; then
             log_error "SSL certificate '$resource' still exists in APISIX (HTTP $RESPONSE)"

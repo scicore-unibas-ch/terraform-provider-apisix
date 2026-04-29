@@ -6,6 +6,30 @@ CLEANUP_ON_FAILURE=${CLEANUP_ON_FAILURE:-true}
 TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$TEST_DIR"
 
+# Generate temporary .tofurc for this test
+log_info "Generating temporary provider config..."
+cat > .tofurc << TOFURC
+provider_installation {
+  dev_overrides {
+    "scicore-unibas-ch/apisix" = "/home/escobar/github/terraform-provider-apisix"
+  }
+  direct {}
+}
+TOFURC
+export TF_CLI_CONFIG_FILE="$TEST_DIR/.tofurc"
+
+# Generate temporary .tofurc for this test
+log_info "Generating temporary provider config..."
+cat > .tofurc << TOFURC
+provider_installation {
+  dev_overrides {
+    "scicore-unibas-ch/apisix" = "/home/escobar/github/terraform-provider-apisix"
+  }
+  direct {}
+}
+TOFURC
+export TF_CLI_CONFIG_FILE="$TEST_DIR/.tofurc"
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -28,7 +52,7 @@ cleanup() {
     if [ "$CLEANUP_ON_FAILURE" = "true" ] || [ $? -eq 0 ]; then
         log_info "Cleaning up..."
         tofu destroy -auto-approve -lock=false 2>/dev/null || true
-        for id in route-test-upstream test-route-advanced test-route-basic test-route-complete test-route-with-script test-route-with-vars; do curl -s -X DELETE "http://localhost:9180/apisix/admin/routes/$id" -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true; done
+        for id in route-test-upstream test-route-advanced test-route-basic test-route-complete test-route-with-script test-route-with-vars; do curl -s -X DELETE "http://localhost:9180/apisix/admin/routesroutes/$id" -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true; done
     else
         log_warn "Leaving resources for debugging (set CLEANUP_ON_FAILURE=true to auto-cleanup)"
     fi
@@ -41,6 +65,12 @@ log_info "Initializing Terraform..."
 # echo "Executing: tofu init -input=false"
 # tofu init -input=false
 
+# Remove lock files for clean test
+rm -f .terraform.lock.hcl .tofurc 2>/dev/null || true
+
+# Remove lock files for clean test
+rm -f .terraform.lock.hcl .tofurc 2>/dev/null || true
+
 # Restart APISIX for clean state
 log_info "Restarting APISIX cluster for clean state..."
 cd ../../
@@ -51,7 +81,7 @@ cd - >/dev/null
 
 # Wait for APISIX to be ready
 for i in {1..60}; do
-    if curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/" \
+    if curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/routes" \
         -H "X-API-KEY: test123456789" | grep -q "200"; then
         log_info "APISIX is ready"
         break
@@ -62,7 +92,7 @@ done
 # Initial cleanup
 log_info "Cleaning up any existing state and APISIX resources..."
 tofu destroy -auto-approve -lock=false 2>/dev/null || true
-    for id in route-test-upstream test-route-advanced test-route-basic test-route-complete test-route-with-script test-route-with-vars; do curl -s -X DELETE "http://localhost:9180/apisix/admin/routes/$id" -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true; done
+    for id in route-test-upstream test-route-advanced test-route-basic test-route-complete test-route-with-script test-route-with-vars; do curl -s -X DELETE "http://localhost:9180/apisix/admin/routesroutes/$id" -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true; done
 
 
 # Test 1: Create all routes
@@ -81,11 +111,11 @@ for resource in basic advanced with_vars complete with_script; do
     log_info "Route '$resource' created with ID: $ROUTE_ID"
     
     # Verify via APISIX API
-    RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/routes/$ROUTE_ID" \
+    RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/routesroutes/$ROUTE_ID" \
         -H "X-API-KEY: test123456789")
     if [ "$RESPONSE" != "200" ]; then
         log_error "Route '$resource' not found in APISIX (HTTP $RESPONSE)"
-        curl -s "http://localhost:9180/apisix/admin/routes/$ROUTE_ID" -H "X-API-KEY: test123456789" | head -20
+        curl -s "http://localhost:9180/apisix/admin/routesroutes/$ROUTE_ID" -H "X-API-KEY: test123456789" | head -20
         exit 1
     fi
 done
@@ -110,7 +140,7 @@ fi
 # Test 3: Verify route configuration via API
 log_info "Test 3: Verify route configurations"
 ADVANCED_ID=$(tofu state show apisix_route.advanced 2>/dev/null | grep '^\s*id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
-RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/routes/$ADVANCED_ID" -H "X-API-KEY: test123456789")
+RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/routesroutes/$ADVANCED_ID" -H "X-API-KEY: test123456789")
 
 # Check for key fields using jq for proper JSON parsing
 URIS=$(echo "$RESPONSE" | jq -r '.value.uris | length')
@@ -127,7 +157,7 @@ log_info "✓ Route configurations verified"
 # Test 3b: Verify complete route configuration
 log_info "Test 3b: Verify complete route configuration"
 COMPLETE_ID=$(tofu state show apisix_route.complete 2>/dev/null | grep '^\s*id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
-RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/routes/$COMPLETE_ID" -H "X-API-KEY: test123456789")
+RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/routesroutes/$COMPLETE_ID" -H "X-API-KEY: test123456789")
 
 # Verify desc field
 DESC=$(echo "$RESPONSE" | jq -r '.value.desc')
@@ -154,7 +184,7 @@ log_info "✓ Complete route configuration verified"
 # Test 3c: Verify route with script
 log_info "Test 3c: Verify route with script configuration"
 WITH_SCRIPT_ID=$(tofu state show apisix_route.with_script 2>/dev/null | grep '^\s*id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
-RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/routes/$WITH_SCRIPT_ID" -H "X-API-KEY: test123456789")
+RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/routesroutes/$WITH_SCRIPT_ID" -H "X-API-KEY: test123456789")
 SCRIPT=$(echo "$RESPONSE" | jq -r '.value.script')
 if [ -z "$SCRIPT" ] || [ "$SCRIPT" = "null" ]; then
     log_error "with_script route script is empty or null"
@@ -171,7 +201,7 @@ tofu destroy -auto-approve -lock=false
 for resource in basic advanced with_vars complete with_script; do
     ROUTE_ID=$(tofu state show apisix_route.$resource 2>/dev/null | grep "^ *id *" | cut -d'"' -f2 || echo "")
     if [ -n "$ROUTE_ID" ]; then
-        RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/routes/$ROUTE_ID" \
+        RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/routesroutes/$ROUTE_ID" \
             -H "X-API-KEY: test123456789")
         if [ "$RESPONSE" != "404" ]; then
             log_error "Route '$resource' still exists in APISIX (HTTP $RESPONSE)"

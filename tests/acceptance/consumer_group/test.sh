@@ -6,6 +6,30 @@ CLEANUP_ON_FAILURE=${CLEANUP_ON_FAILURE:-true}
 TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$TEST_DIR"
 
+# Generate temporary .tofurc for this test
+log_info "Generating temporary provider config..."
+cat > .tofurc << TOFURC
+provider_installation {
+  dev_overrides {
+    "scicore-unibas-ch/apisix" = "/home/escobar/github/terraform-provider-apisix"
+  }
+  direct {}
+}
+TOFURC
+export TF_CLI_CONFIG_FILE="$TEST_DIR/.tofurc"
+
+# Generate temporary .tofurc for this test
+log_info "Generating temporary provider config..."
+cat > .tofurc << TOFURC
+provider_installation {
+  dev_overrides {
+    "scicore-unibas-ch/apisix" = "/home/escobar/github/terraform-provider-apisix"
+  }
+  direct {}
+}
+TOFURC
+export TF_CLI_CONFIG_FILE="$TEST_DIR/.tofurc"
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -40,6 +64,12 @@ log_info "Initializing Terraform..."
 # echo "Executing: tofu init -input=false"
 # tofu init -input=false
 
+# Remove lock files for clean test
+rm -f .terraform.lock.hcl .tofurc 2>/dev/null || true
+
+# Remove lock files for clean test
+rm -f .terraform.lock.hcl .tofurc 2>/dev/null || true
+
 # Restart APISIX for clean state
 log_info "Restarting APISIX cluster for clean state..."
 cd ../../
@@ -50,7 +80,7 @@ cd - >/dev/null
 
 # Wait for APISIX to be ready
 for i in {1..60}; do
-    if curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/" \
+    if curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/routes" \
         -H "X-API-KEY: test123456789" | grep -q "200"; then
         log_info "APISIX is ready"
         break
@@ -79,11 +109,11 @@ for resource in basic with_plugins multi_plugins with_name with_labels consumer_
     log_info "Consumer group '$resource' created with ID: $GROUP_ID"
     
     # Verify via APISIX API
-    RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/consumer_groups/$GROUP_ID" \
+    RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/routesconsumer_groups/$GROUP_ID" \
         -H "X-API-KEY: test123456789")
     if [ "$RESPONSE" != "200" ]; then
         log_error "Consumer group '$resource' not found in APISIX (HTTP $RESPONSE)"
-        curl -s "http://localhost:9180/apisix/admin/consumer_groups/$GROUP_ID" -H "X-API-KEY: test123456789" | head -20
+        curl -s "http://localhost:9180/apisix/admin/routesconsumer_groups/$GROUP_ID" -H "X-API-KEY: test123456789" | head -20
         exit 1
     fi
 done
@@ -110,25 +140,25 @@ log_info "Test 3: Verify consumer group configurations"
 
 # Verify with_plugins consumer group
 WITH_PLUGINS_ID=$(tofu state show apisix_consumer_group.with_plugins 2>/dev/null | grep '^\s*group_id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
-RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/consumer_groups/$WITH_PLUGINS_ID" -H "X-API-KEY: test123456789")
+RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/routesconsumer_groups/$WITH_PLUGINS_ID" -H "X-API-KEY: test123456789")
 PLUGINS_COUNT=$(echo "$RESPONSE" | jq -r '.value.plugins | keys | length')
 [ "$PLUGINS_COUNT" = "1" ] || { log_error "with_plugins consumer group plugins mismatch: got $PLUGINS_COUNT"; exit 1; }
 
 # Verify multi_plugins consumer group
 MULTI_PLUGINS_ID=$(tofu state show apisix_consumer_group.multi_plugins 2>/dev/null | grep '^\s*group_id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
-RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/consumer_groups/$MULTI_PLUGINS_ID" -H "X-API-KEY: test123456789")
+RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/routesconsumer_groups/$MULTI_PLUGINS_ID" -H "X-API-KEY: test123456789")
 PLUGINS_COUNT=$(echo "$RESPONSE" | jq -r '.value.plugins | keys | length')
 [ "$PLUGINS_COUNT" = "2" ] || { log_error "multi_plugins consumer group plugins mismatch: got $PLUGINS_COUNT"; exit 1; }
 
 # Verify with_name consumer group
 WITH_NAME_ID=$(tofu state show apisix_consumer_group.with_name 2>/dev/null | grep '^\s*group_id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
-RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/consumer_groups/$WITH_NAME_ID" -H "X-API-KEY: test123456789")
+RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/routesconsumer_groups/$WITH_NAME_ID" -H "X-API-KEY: test123456789")
 NAME=$(echo "$RESPONSE" | jq -r '.value.name')
 [ "$NAME" = "Premium Tier Group" ] || { log_error "with_name consumer group name mismatch: got $NAME"; exit 1; }
 
 # Verify with_labels consumer group
 WITH_LABELS_ID=$(tofu state show apisix_consumer_group.with_labels 2>/dev/null | grep '^\s*group_id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
-RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/consumer_groups/$WITH_LABELS_ID" -H "X-API-KEY: test123456789")
+RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/routesconsumer_groups/$WITH_LABELS_ID" -H "X-API-KEY: test123456789")
 LABELS_COUNT=$(echo "$RESPONSE" | jq -r '.value.labels | keys | length')
 [ "$LABELS_COUNT" = "3" ] || { log_error "with_labels consumer group labels mismatch: got $LABELS_COUNT"; exit 1; }
 
@@ -143,7 +173,7 @@ tofu destroy -auto-approve -lock=false
 for resource in basic with_plugins multi_plugins with_name with_labels consumer_test; do
     GROUP_ID=$(tofu state show apisix_consumer_group.$resource 2>/dev/null | grep "^ *group_id *" | cut -d'"' -f2 || echo "")
     if [ -n "$GROUP_ID" ]; then
-        RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/consumer_groups/$GROUP_ID" \
+        RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/routesconsumer_groups/$GROUP_ID" \
             -H "X-API-KEY: test123456789")
         if [ "$RESPONSE" != "404" ]; then
             log_error "Consumer group '$resource' still exists in APISIX (HTTP $RESPONSE)"
