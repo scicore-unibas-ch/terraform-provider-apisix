@@ -38,7 +38,7 @@ trap cleanup EXIT
 
 # Generate temporary .tofurc for this test
 log_info "Generating temporary provider config..."
-cat > .tofurc << TOFURC
+cat > "$TEST_DIR/.tofurc" << TOFURC
 provider_installation {
   dev_overrides {
     "scicore-unibas-ch/apisix" = "/home/escobar/github/terraform-provider-apisix"
@@ -47,6 +47,7 @@ provider_installation {
 }
 TOFURC
 export TF_CLI_CONFIG_FILE="$TEST_DIR/.tofurc"
+log_info "Using config: $TF_CLI_CONFIG_FILE"
 
 
 # Initialize
@@ -55,10 +56,10 @@ log_info "Initializing Terraform..."
 # tofu init -input=false
 
 # Remove lock files for clean test
-rm -f .terraform.lock.hcl .tofurc 2>/dev/null || true
+rm -f .terraform.lock.hcl 2>/dev/null || true
 
 # Remove lock files for clean test
-rm -f .terraform.lock.hcl .tofurc 2>/dev/null || true
+rm -f .terraform.lock.hcl 2>/dev/null || true
 
 # Restart APISIX for clean state
 log_info "Restarting APISIX cluster for clean state..."
@@ -89,12 +90,12 @@ tofu destroy -auto-approve -lock=false 2>/dev/null || true
 # Force cleanup via API in case state is out of sync
 log_info "Force cleaning APISIX resources via API..."
 for rule_id in test-gr-basic test-gr-multi test-gr-ip test-gr-route; do
-    curl -s -X DELETE "http://localhost:9180/apisix/admin/routesglobal_rules/$rule_id" \
+    curl -s -X DELETE "http://localhost:9180/apisix/admin/global_rules/$rule_id" \
         -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true
 done
 curl -s -X DELETE "http://localhost:9180/apisix/admin/routesroutes/test-route-with-gr" \
     -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true
-curl -s -X DELETE "http://localhost:9180/apisix/admin/routesupstreams/test-gr-upstream" \
+curl -s -X DELETE "http://localhost:9180/apisix/admin/upstreams/test-gr-upstream" \
     -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true
 
 # Test 1: Create all global rules
@@ -113,11 +114,11 @@ for resource in basic multi_plugins ip_restriction route_integration; do
     log_info "Global rule '$resource' created with ID: $RULE_ID"
     
     # Verify via APISIX API
-    RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/routesglobal_rules/$RULE_ID" \
+    RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/global_rules/$RULE_ID" \
         -H "X-API-KEY: test123456789")
     if [ "$RESPONSE" != "200" ]; then
         log_error "Global rule '$resource' not found in APISIX (HTTP $RESPONSE)"
-        curl -s "http://localhost:9180/apisix/admin/routesglobal_rules/$RULE_ID" -H "X-API-KEY: test123456789" | head -20
+        curl -s "http://localhost:9180/apisix/admin/global_rules/$RULE_ID" -H "X-API-KEY: test123456789" | head -20
         exit 1
     fi
 done
@@ -144,13 +145,13 @@ log_info "Test 3: Verify global rule configurations"
 
 # Verify multi_plugins global rule
 MULTI_ID=$(tofu state show apisix_global_rule.multi_plugins 2>/dev/null | grep '^\s*rule_id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
-RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/routesglobal_rules/$MULTI_ID" -H "X-API-KEY: test123456789")
+RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/global_rules/$MULTI_ID" -H "X-API-KEY: test123456789")
 PLUGINS_COUNT=$(echo "$RESPONSE" | jq -r '.value.plugins | keys | length')
 [ "$PLUGINS_COUNT" = "2" ] || { log_error "multi_plugins global rule plugins mismatch: got $PLUGINS_COUNT"; exit 1; }
 
 # Verify ip_restriction global rule
 IP_ID=$(tofu state show apisix_global_rule.ip_restriction 2>/dev/null | grep '^\s*rule_id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
-RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/routesglobal_rules/$IP_ID" -H "X-API-KEY: test123456789")
+RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/global_rules/$IP_ID" -H "X-API-KEY: test123456789")
 BLACKLIST=$(echo "$RESPONSE" | jq -r '.value.plugins["ip-restriction"].blacklist | length')
 [ "$BLACKLIST" = "1" ] || { log_error "ip_restriction global rule blacklist mismatch: got $BLACKLIST"; exit 1; }
 
@@ -165,7 +166,7 @@ tofu destroy -auto-approve -lock=false
 for resource in basic multi_plugins ip_restriction route_integration; do
     RULE_ID=$(tofu state show apisix_global_rule.$resource 2>/dev/null | grep "^ *rule_id *" | cut -d'"' -f2 || echo "")
     if [ -n "$RULE_ID" ]; then
-        RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/routesglobal_rules/$RULE_ID" \
+        RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/global_rules/$RULE_ID" \
             -H "X-API-KEY: test123456789")
         if [ "$RESPONSE" != "404" ]; then
             log_error "Global rule '$resource' still exists in APISIX (HTTP $RESPONSE)"

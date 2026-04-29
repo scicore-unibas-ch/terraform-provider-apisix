@@ -39,7 +39,7 @@ trap cleanup EXIT
 
 # Generate temporary .tofurc for this test
 log_info "Generating temporary provider config..."
-cat > .tofurc << TOFURC
+cat > "$TEST_DIR/.tofurc" << TOFURC
 provider_installation {
   dev_overrides {
     "scicore-unibas-ch/apisix" = "/home/escobar/github/terraform-provider-apisix"
@@ -48,6 +48,7 @@ provider_installation {
 }
 TOFURC
 export TF_CLI_CONFIG_FILE="$TEST_DIR/.tofurc"
+log_info "Using config: $TF_CLI_CONFIG_FILE"
 
 
 # Initialize
@@ -56,10 +57,10 @@ log_info "Initializing Terraform..."
 # tofu init -input=false
 
 # Remove lock files for clean test
-rm -f .terraform.lock.hcl .tofurc 2>/dev/null || true
+rm -f .terraform.lock.hcl 2>/dev/null || true
 
 # Remove lock files for clean test
-rm -f .terraform.lock.hcl .tofurc 2>/dev/null || true
+rm -f .terraform.lock.hcl 2>/dev/null || true
 
 # Restart APISIX for clean state
 log_info "Restarting APISIX cluster for clean state..."

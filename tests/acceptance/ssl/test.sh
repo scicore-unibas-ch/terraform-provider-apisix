@@ -29,7 +29,7 @@ cleanup() {
     if [ "$CLEANUP_ON_FAILURE" = "true" ] || [ $? -eq 0 ]; then
         log_info "Cleaning up..."
         tofu destroy -auto-approve -lock=false 2>/dev/null || true
-        for id in example.com labeled.example.com secure.example.com; do curl -s -X DELETE "http://localhost:9180/apisix/admin/routesssls/$id" -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true; done
+        for id in example.com labeled.example.com secure.example.com; do curl -s -X DELETE "http://localhost:9180/apisix/admin/ssls/$id" -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true; done
     else
         log_warn "Leaving resources for debugging (set CLEANUP_ON_FAILURE=true to auto-cleanup)"
     fi
@@ -39,7 +39,7 @@ trap cleanup EXIT
 
 # Generate temporary .tofurc for this test
 log_info "Generating temporary provider config..."
-cat > .tofurc << TOFURC
+cat > "$TEST_DIR/.tofurc" << TOFURC
 provider_installation {
   dev_overrides {
     "scicore-unibas-ch/apisix" = "/home/escobar/github/terraform-provider-apisix"
@@ -48,6 +48,7 @@ provider_installation {
 }
 TOFURC
 export TF_CLI_CONFIG_FILE="$TEST_DIR/.tofurc"
+log_info "Using config: $TF_CLI_CONFIG_FILE"
 
 
 # Check if SSL port is available
@@ -68,10 +69,10 @@ log_info "Initializing Terraform..."
 # tofu init -input=false
 
 # Remove lock files for clean test
-rm -f .terraform.lock.hcl .tofurc 2>/dev/null || true
+rm -f .terraform.lock.hcl 2>/dev/null || true
 
 # Remove lock files for clean test
-rm -f .terraform.lock.hcl .tofurc 2>/dev/null || true
+rm -f .terraform.lock.hcl 2>/dev/null || true
 
 # Restart APISIX for clean state
 log_info "Restarting APISIX cluster for clean state..."
@@ -94,7 +95,7 @@ done
 # Initial cleanup
 log_info "Cleaning up any existing state and APISIX resources..."
 tofu destroy -auto-approve -lock=false 2>/dev/null || true
-    for id in example.com labeled.example.com secure.example.com; do curl -s -X DELETE "http://localhost:9180/apisix/admin/routesssls/$id" -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true; done
+    for id in example.com labeled.example.com secure.example.com; do curl -s -X DELETE "http://localhost:9180/apisix/admin/ssls/$id" -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true; done
 
 
 # Test 1: Create all SSL certificates

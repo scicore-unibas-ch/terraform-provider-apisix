@@ -38,7 +38,7 @@ trap cleanup EXIT
 
 # Generate temporary .tofurc for this test
 log_info "Generating temporary provider config..."
-cat > .tofurc << TOFURC
+cat > "$TEST_DIR/.tofurc" << TOFURC
 provider_installation {
   dev_overrides {
     "scicore-unibas-ch/apisix" = "/home/escobar/github/terraform-provider-apisix"
@@ -47,6 +47,7 @@ provider_installation {
 }
 TOFURC
 export TF_CLI_CONFIG_FILE="$TEST_DIR/.tofurc"
+log_info "Using config: $TF_CLI_CONFIG_FILE"
 
 
 # Initialize
@@ -55,10 +56,10 @@ log_info "Initializing Terraform..."
 # tofu init -input=false
 
 # Remove lock files for clean test
-rm -f .terraform.lock.hcl .tofurc 2>/dev/null || true
+rm -f .terraform.lock.hcl 2>/dev/null || true
 
 # Remove lock files for clean test
-rm -f .terraform.lock.hcl .tofurc 2>/dev/null || true
+rm -f .terraform.lock.hcl 2>/dev/null || true
 
 # Restart APISIX for clean state
 log_info "Restarting APISIX cluster for clean state..."
@@ -99,11 +100,11 @@ for resource in basic key_auth jwt_auth with_labels hmac_auth with_group; do
     log_info "Consumer '$resource' created with username: $CONSUMER_ID"
     
     # Verify via APISIX API
-    RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/routesconsumers/$CONSUMER_ID" \
+    RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/consumers/$CONSUMER_ID" \
         -H "X-API-KEY: test123456789")
     if [ "$RESPONSE" != "200" ]; then
         log_error "Consumer '$resource' not found in APISIX (HTTP $RESPONSE)"
-        curl -s "http://localhost:9180/apisix/admin/routesconsumers/$CONSUMER_ID" -H "X-API-KEY: test123456789" | head -20
+        curl -s "http://localhost:9180/apisix/admin/consumers/$CONSUMER_ID" -H "X-API-KEY: test123456789" | head -20
         exit 1
     fi
 done
@@ -130,25 +131,25 @@ log_info "Test 3: Verify consumer configurations"
 
 # Verify key_auth consumer
 KEY_AUTH_ID=$(tofu state show apisix_consumer.key_auth 2>/dev/null | grep '^\s*username\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
-RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/routesconsumers/$KEY_AUTH_ID" -H "X-API-KEY: test123456789")
+RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/consumers/$KEY_AUTH_ID" -H "X-API-KEY: test123456789")
 PLUGINS_COUNT=$(echo "$RESPONSE" | jq -r '.value.plugins | keys | length')
 [ "$PLUGINS_COUNT" = "1" ] || { log_error "key_auth consumer plugins mismatch: got $PLUGINS_COUNT"; exit 1; }
 
 # Verify jwt_auth consumer
 JWT_AUTH_ID=$(tofu state show apisix_consumer.jwt_auth 2>/dev/null | grep '^\s*username\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
-RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/routesconsumers/$JWT_AUTH_ID" -H "X-API-KEY: test123456789")
+RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/consumers/$JWT_AUTH_ID" -H "X-API-KEY: test123456789")
 JWT_KEY=$(echo "$RESPONSE" | jq -r '.value.plugins["jwt-auth"].key')
 [ "$JWT_KEY" = "jwt-test-key" ] || { log_error "jwt_auth consumer key mismatch: got $JWT_KEY"; exit 1; }
 
 # Verify with_labels consumer
 WITH_LABELS_ID=$(tofu state show apisix_consumer.with_labels 2>/dev/null | grep '^\s*username\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
-RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/routesconsumers/$WITH_LABELS_ID" -H "X-API-KEY: test123456789")
+RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/consumers/$WITH_LABELS_ID" -H "X-API-KEY: test123456789")
 LABELS_COUNT=$(echo "$RESPONSE" | jq -r '.value.labels | keys | length')
 [ "$LABELS_COUNT" = "3" ] || { log_error "with_labels consumer labels mismatch: got $LABELS_COUNT"; exit 1; }
 
 # Verify with_group consumer
 WITH_GROUP_ID=$(tofu state show apisix_consumer.with_group 2>/dev/null | grep '^\s*username\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
-RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/routesconsumers/$WITH_GROUP_ID" -H "X-API-KEY: test123456789")
+RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/consumers/$WITH_GROUP_ID" -H "X-API-KEY: test123456789")
 GROUP_ID=$(echo "$RESPONSE" | jq -r '.value.group_id')
 [ "$GROUP_ID" = "test-consumer-group" ] || { log_error "with_group consumer group_id mismatch: got $GROUP_ID"; exit 1; }
 
@@ -163,7 +164,7 @@ tofu destroy -auto-approve -lock=false
 for resource in basic key_auth jwt_auth with_labels hmac_auth with_group; do
     CONSUMER_ID=$(tofu state show apisix_consumer.$resource 2>/dev/null | grep "^ *username *" | cut -d'"' -f2 || echo "")
     if [ -n "$CONSUMER_ID" ]; then
-        RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/routesconsumers/$CONSUMER_ID" \
+        RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/consumers/$CONSUMER_ID" \
             -H "X-API-KEY: test123456789")
         if [ "$RESPONSE" != "404" ]; then
             log_error "Consumer '$resource' still exists in APISIX (HTTP $RESPONSE)"

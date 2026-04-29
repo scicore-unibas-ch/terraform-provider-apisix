@@ -29,7 +29,7 @@ cleanup() {
     if [ "$CLEANUP_ON_FAILURE" = "true" ] || [ $? -eq 0 ]; then
         log_info "Cleaning up..."
         tofu destroy -auto-approve -lock=false 2>/dev/null || true
-        for id in service-test-upstream; do curl -s -X DELETE "http://localhost:9180/apisix/admin/routesservices/$id" -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true; done
+        for id in service-test-upstream; do curl -s -X DELETE "http://localhost:9180/apisix/admin/services/$id" -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true; done
     else
         log_warn "Leaving resources for debugging (set CLEANUP_ON_FAILURE=true to auto-cleanup)"
     fi
@@ -39,7 +39,7 @@ trap cleanup EXIT
 
 # Generate temporary .tofurc for this test
 log_info "Generating temporary provider config..."
-cat > .tofurc << TOFURC
+cat > "$TEST_DIR/.tofurc" << TOFURC
 provider_installation {
   dev_overrides {
     "scicore-unibas-ch/apisix" = "/home/escobar/github/terraform-provider-apisix"
@@ -48,6 +48,7 @@ provider_installation {
 }
 TOFURC
 export TF_CLI_CONFIG_FILE="$TEST_DIR/.tofurc"
+log_info "Using config: $TF_CLI_CONFIG_FILE"
 
 
 # Initialize
@@ -56,10 +57,10 @@ log_info "Initializing Terraform..."
 # tofu init -input=false
 
 # Remove lock files for clean test
-rm -f .terraform.lock.hcl .tofurc 2>/dev/null || true
+rm -f .terraform.lock.hcl 2>/dev/null || true
 
 # Remove lock files for clean test
-rm -f .terraform.lock.hcl .tofurc 2>/dev/null || true
+rm -f .terraform.lock.hcl 2>/dev/null || true
 
 # Restart APISIX for clean state
 log_info "Restarting APISIX cluster for clean state..."
@@ -82,7 +83,7 @@ done
 # Initial cleanup
 log_info "Cleaning up any existing state and APISIX resources..."
 tofu destroy -auto-approve -lock=false 2>/dev/null || true
-    for id in service-test-upstream; do curl -s -X DELETE "http://localhost:9180/apisix/admin/routesservices/$id" -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true; done
+    for id in service-test-upstream; do curl -s -X DELETE "http://localhost:9180/apisix/admin/services/$id" -H "X-API-KEY: test123456789" > /dev/null 2>&1 || true; done
 
 
 # Test 1: Create all services
@@ -101,11 +102,11 @@ for resource in basic with_hosts with_plugins with_upstream with_labels with_scr
     log_info "Service '$resource' created with ID: $SERVICE_ID"
     
     # Verify via APISIX API
-    RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/routesservices/$SERVICE_ID" \
+    RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/services/$SERVICE_ID" \
         -H "X-API-KEY: test123456789")
     if [ "$RESPONSE" != "200" ]; then
         log_error "Service '$resource' not found in APISIX (HTTP $RESPONSE)"
-        curl -s "http://localhost:9180/apisix/admin/routesservices/$SERVICE_ID" -H "X-API-KEY: test123456789" | head -20
+        curl -s "http://localhost:9180/apisix/admin/services/$SERVICE_ID" -H "X-API-KEY: test123456789" | head -20
         exit 1
     fi
 done
@@ -132,19 +133,19 @@ log_info "Test 3: Verify service configurations"
 
 # Verify with_hosts service
 WITH_HOSTS_ID=$(tofu state show apisix_service.with_hosts 2>/dev/null | grep '^\s*id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
-RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/routesservices/$WITH_HOSTS_ID" -H "X-API-KEY: test123456789")
+RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/services/$WITH_HOSTS_ID" -H "X-API-KEY: test123456789")
 HOSTS_COUNT=$(echo "$RESPONSE" | jq -r '.value.hosts | length')
 [ "$HOSTS_COUNT" = "2" ] || { log_error "with_hosts service hosts mismatch: got $HOSTS_COUNT"; exit 1; }
 
 # Verify with_plugins service
 WITH_PLUGINS_ID=$(tofu state show apisix_service.with_plugins 2>/dev/null | grep '^\s*id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
-RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/routesservices/$WITH_PLUGINS_ID" -H "X-API-KEY: test123456789")
+RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/services/$WITH_PLUGINS_ID" -H "X-API-KEY: test123456789")
 PLUGINS_COUNT=$(echo "$RESPONSE" | jq -r '.value.plugins | keys | length')
 [ "$PLUGINS_COUNT" = "2" ] || { log_error "with_plugins service plugins mismatch: got $PLUGINS_COUNT"; exit 1; }
 
 # Verify with_labels service
 WITH_LABELS_ID=$(tofu state show apisix_service.with_labels 2>/dev/null | grep '^\s*id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
-RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/routesservices/$WITH_LABELS_ID" -H "X-API-KEY: test123456789")
+RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/services/$WITH_LABELS_ID" -H "X-API-KEY: test123456789")
 LABELS_COUNT=$(echo "$RESPONSE" | jq -r '.value.labels | keys | length')
 WEBSOCKET=$(echo "$RESPONSE" | jq -r '.value.enable_websocket')
 [ "$LABELS_COUNT" = "3" ] || { log_error "with_labels service labels mismatch: got $LABELS_COUNT"; exit 1; }
@@ -152,7 +153,7 @@ WEBSOCKET=$(echo "$RESPONSE" | jq -r '.value.enable_websocket')
 
 # Verify with_script service
 WITH_SCRIPT_ID=$(tofu state show apisix_service.with_script 2>/dev/null | grep '^\s*id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
-RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/routesservices/$WITH_SCRIPT_ID" -H "X-API-KEY: test123456789")
+RESPONSE=$(curl -s "http://localhost:9180/apisix/admin/services/$WITH_SCRIPT_ID" -H "X-API-KEY: test123456789")
 SCRIPT=$(echo "$RESPONSE" | jq -r '.value.script')
 if [ -z "$SCRIPT" ] || [ "$SCRIPT" = "null" ]; then
     log_error "with_script service script is empty or null"
@@ -169,7 +170,7 @@ tofu destroy -auto-approve -lock=false
 for resource in basic with_hosts with_plugins with_upstream with_labels with_script; do
     SERVICE_ID=$(tofu state show apisix_service.$resource 2>/dev/null | grep "^ *id *" | cut -d'"' -f2 || echo "")
     if [ -n "$SERVICE_ID" ]; then
-        RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/routesservices/$SERVICE_ID" \
+        RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:9180/apisix/admin/services/$SERVICE_ID" \
             -H "X-API-KEY: test123456789")
         if [ "$RESPONSE" != "404" ]; then
             log_error "Service '$resource' still exists in APISIX (HTTP $RESPONSE)"
