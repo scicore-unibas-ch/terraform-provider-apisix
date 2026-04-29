@@ -29,17 +29,26 @@ type UpstreamTimeout struct {
 
 // Upstream represents an APISIX upstream configuration
 type Upstream struct {
-	ID           string                 `json:"id,omitempty"`
-	Name         string                 `json:"name,omitempty"`
-	Desc         string                 `json:"desc,omitempty"`
-	Type         string                 `json:"type"`
-	Nodes        []UpstreamNode         `json:"nodes"`
-	HealthCheck  map[string]interface{} `json:"checks,omitempty"`
-	Timeout      *UpstreamTimeout       `json:"timeout,omitempty"`
-	Retries      int                    `json:"retries,omitempty"`
-	RetryTimeout int                    `json:"retry_timeout,omitempty"`
-	Scheme       string                 `json:"scheme,omitempty"`
-	Labels       map[string]string      `json:"labels,omitempty"`
+	ID            string                 `json:"id,omitempty"`
+	Name          string                 `json:"name,omitempty"`
+	Desc          string                 `json:"desc,omitempty"`
+	Type          string                 `json:"type"`
+	Nodes         []UpstreamNode         `json:"nodes,omitempty"`
+	HealthCheck   map[string]interface{} `json:"checks,omitempty"`
+	Timeout       *UpstreamTimeout       `json:"timeout,omitempty"`
+	Retries       int                    `json:"retries,omitempty"`
+	RetryTimeout  int                    `json:"retry_timeout,omitempty"`
+	Scheme        string                 `json:"scheme,omitempty"`
+	Labels        map[string]string      `json:"labels,omitempty"`
+	ServiceName   string                 `json:"service_name,omitempty"`
+	DiscoveryType string                 `json:"discovery_type,omitempty"`
+	DiscoveryArgs map[string]string      `json:"discovery_args,omitempty"`
+	HashOn        string                 `json:"hash_on,omitempty"`
+	Key           string                 `json:"key,omitempty"`
+	PassHost      string                 `json:"pass_host,omitempty"`
+	UpstreamHost  string                 `json:"upstream_host,omitempty"`
+	KeepalivePool map[string]interface{} `json:"keepalive_pool,omitempty"`
+	TLS           map[string]interface{} `json:"tls,omitempty"`
 }
 
 // APISIXError represents an error response from APISIX

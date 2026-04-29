@@ -2,11 +2,28 @@ package resources
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+	"github.com/scicore-unibas-ch/terraform-provider-apisix/internal/apisix"
 )
+
+// getClient retrieves the APISIX client from provider meta
+func getClient(meta interface{}) (*apisix.Client, error) {
+	if meta == nil {
+		return nil, fmt.Errorf("provider meta is nil")
+	}
+	client, ok := meta.(*apisix.Client)
+	if !ok {
+		return nil, fmt.Errorf("failed to convert provider meta to APISIX client")
+	}
+	return client, nil
+}
 
 func ResourceApisixUpstream() *schema.Resource {
 	return &schema.Resource{
@@ -259,21 +276,282 @@ func ResourceApisixUpstream() *schema.Resource {
 }
 
 func resourceApisixUpstreamCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	// TODO: Implement create
-	return diag.Diagnostics{}
+	client, err := getClient(meta)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	upstream := expandUpstream(d)
+	id := d.Get("name").(string)
+	if id == "" {
+		id = fmt.Sprintf("upstream-%d", fmt.Sprintf("%d", time.Now().UnixNano()))
+	}
+
+	err = client.Create(ctx, "upstreams", id, upstream)
+	if err != nil {
+		return diag.FromErr(fmt.Errorf("failed to create upstream: %w", err))
+	}
+
+	d.SetId(id)
+	return resourceApisixUpstreamRead(ctx, d, meta)
 }
 
 func resourceApisixUpstreamRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	// TODO: Implement read
-	return diag.Diagnostics{}
+	client, err := getClient(meta)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	data, err := client.Read(ctx, "upstreams", d.Id())
+	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			d.SetId("")
+			return nil
+		}
+		return diag.FromErr(fmt.Errorf("failed to read upstream: %w", err))
+	}
+
+	var resp apisix.APISIXResponse
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to unmarshal response: %w", err))
+	}
+
+	return flattenUpstream(d, resp.Value)
 }
 
 func resourceApisixUpstreamUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	// TODO: Implement update
-	return diag.Diagnostics{}
+	client, err := getClient(meta)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	upstream := expandUpstream(d)
+	err = client.Update(ctx, "upstreams", d.Id(), upstream)
+	if err != nil {
+		return diag.FromErr(fmt.Errorf("failed to update upstream: %w", err))
+	}
+
+	return resourceApisixUpstreamRead(ctx, d, meta)
 }
 
 func resourceApisixUpstreamDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	// TODO: Implement delete
-	return diag.Diagnostics{}
+	client, err := getClient(meta)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	err = client.Delete(ctx, "upstreams", d.Id(), false)
+	if err != nil {
+		return diag.FromErr(fmt.Errorf("failed to delete upstream: %w", err))
+	}
+
+	d.SetId("")
+	return nil
+}
+
+// expandUpstream converts Terraform resource data to APISIX Upstream struct
+func expandUpstream(d *schema.ResourceData) *apisix.Upstream {
+	upstream := &apisix.Upstream{
+		Type:   d.Get("type").(string),
+		Scheme: d.Get("scheme").(string),
+	}
+
+	if v, ok := d.GetOk("name"); ok {
+		upstream.Name = v.(string)
+	}
+	if v, ok := d.GetOk("desc"); ok {
+		upstream.Desc = v.(string)
+	}
+	if v, ok := d.GetOk("nodes"); ok {
+		upstream.Nodes = expandNodes(v.([]interface{}))
+	}
+	if v, ok := d.GetOk("health_check"); ok {
+		var checks map[string]interface{}
+		if err := json.Unmarshal([]byte(v.(string)), &checks); err == nil {
+			upstream.HealthCheck = checks
+		}
+	}
+	if v, ok := d.GetOk("timeout"); ok {
+		upstream.Timeout = expandTimeout(v.([]interface{}))
+	}
+	if v, ok := d.GetOk("retries"); ok {
+		upstream.Retries = v.(int)
+	}
+	if v, ok := d.GetOk("retry_timeout"); ok {
+		upstream.RetryTimeout = v.(int)
+	}
+	if v, ok := d.GetOk("labels"); ok {
+		labels := make(map[string]string)
+		for k, v := range v.(map[string]interface{}) {
+			labels[k] = v.(string)
+		}
+		upstream.Labels = labels
+	}
+	if v, ok := d.GetOk("service_name"); ok {
+		upstream.ServiceName = v.(string)
+	}
+	if v, ok := d.GetOk("discovery_type"); ok {
+		upstream.DiscoveryType = v.(string)
+	}
+	if v, ok := d.GetOk("discovery_args"); ok {
+		args := make(map[string]string)
+		for k, v := range v.(map[string]interface{}) {
+			args[k] = v.(string)
+		}
+		upstream.DiscoveryArgs = args
+	}
+	if v, ok := d.GetOk("hash_on"); ok {
+		upstream.HashOn = v.(string)
+	}
+	if v, ok := d.GetOk("key"); ok {
+		upstream.Key = v.(string)
+	}
+	if v, ok := d.GetOk("pass_host"); ok {
+		upstream.PassHost = v.(string)
+	}
+	if v, ok := d.GetOk("upstream_host"); ok {
+		upstream.UpstreamHost = v.(string)
+	}
+	if v, ok := d.GetOk("keepalive_pool"); ok {
+		upstream.KeepalivePool = expandKeepalivePool(v.([]interface{}))
+	}
+	if v, ok := d.GetOk("tls"); ok {
+		upstream.TLS = expandTLS(v.([]interface{}))
+	}
+
+	return upstream
+}
+
+// expandNodes converts Terraform nodes list to APISIX UpstreamNode slice
+func expandNodes(nodes []interface{}) []apisix.UpstreamNode {
+	result := make([]apisix.UpstreamNode, 0, len(nodes))
+	for _, node := range nodes {
+		n := node.(map[string]interface{})
+		upstreamNode := apisix.UpstreamNode{
+			Host:   n["host"].(string),
+			Weight: n["weight"].(int),
+		}
+		if v, ok := n["port"].(int); ok && v > 0 {
+			upstreamNode.Port = v
+		}
+		if v, ok := n["priority"].(int); ok {
+			upstreamNode.Priority = v
+		}
+		result = append(result, upstreamNode)
+	}
+	return result
+}
+
+// expandTimeout converts Terraform timeout block to APISIX UpstreamTimeout
+func expandTimeout(timeouts []interface{}) *apisix.UpstreamTimeout {
+	if len(timeouts) == 0 || timeouts[0] == nil {
+		return nil
+	}
+	t := timeouts[0].(map[string]interface{})
+	return &apisix.UpstreamTimeout{
+		Connect: t["connect"].(int),
+		Send:    t["send"].(int),
+		Read:    t["read"].(int),
+	}
+}
+
+// expandKeepalivePool converts Terraform keepalive_pool block to map
+func expandKeepalivePool(pool []interface{}) map[string]interface{} {
+	if len(pool) == 0 || pool[0] == nil {
+		return nil
+	}
+	p := pool[0].(map[string]interface{})
+	return map[string]interface{}{
+		"size":         p["size"].(int),
+		"idle_timeout": p["idle_timeout"].(int),
+		"requests":     p["requests"].(int),
+	}
+}
+
+// expandTLS converts Terraform tls block to map
+func expandTLS(tls []interface{}) map[string]interface{} {
+	if len(tls) == 0 || tls[0] == nil {
+		return nil
+	}
+	t := tls[0].(map[string]interface{})
+	result := make(map[string]interface{})
+	if v, ok := t["client_cert"].(string); ok && v != "" {
+		result["client_cert"] = v
+	}
+	if v, ok := t["client_key"].(string); ok && v != "" {
+		result["client_key"] = v
+	}
+	if v, ok := t["client_cert_id"].(string); ok && v != "" {
+		result["client_cert_id"] = v
+	}
+	if v, ok := t["verify"].(bool); ok {
+		result["verify"] = v
+	}
+	return result
+}
+
+// flattenUpstream sets Terraform state from APISIX upstream response
+func flattenUpstream(d *schema.ResourceData, value interface{}) diag.Diagnostics {
+	data, ok := value.(map[string]interface{})
+	if !ok {
+		return diag.Errorf("failed to convert upstream data")
+	}
+
+	d.Set("name", data["name"])
+	d.Set("desc", data["desc"])
+	d.Set("type", data["type"])
+	d.Set("scheme", data["scheme"])
+	d.Set("hash_on", data["hash_on"])
+	d.Set("key", data["key"])
+	d.Set("pass_host", data["pass_host"])
+	d.Set("upstream_host", data["upstream_host"])
+	d.Set("service_name", data["service_name"])
+	d.Set("discovery_type", data["discovery_type"])
+	d.Set("retries", data["retries"])
+	d.Set("retry_timeout", data["retry_timeout"])
+
+	if labels, ok := data["labels"].(map[string]string); ok {
+		d.Set("labels", labels)
+	}
+
+	if nodes, ok := data["nodes"].([]interface{}); ok {
+		d.Set("nodes", flattenNodes(nodes))
+	}
+
+	if timeout, ok := data["timeout"].(map[string]interface{}); ok {
+		d.Set("timeout", []interface{}{timeout})
+	}
+
+	if healthCheck, ok := data["checks"]; ok {
+		if jsonBytes, err := json.Marshal(healthCheck); err == nil {
+			d.Set("health_check", string(jsonBytes))
+		}
+	}
+
+	if keepalivePool, ok := data["keepalive_pool"]; ok {
+		d.Set("keepalive_pool", []interface{}{keepalivePool})
+	}
+
+	if tls, ok := data["tls"]; ok {
+		d.Set("tls", []interface{}{tls})
+	}
+
+	return nil
+}
+
+// flattenNodes converts APISIX nodes to Terraform format
+func flattenNodes(nodes []interface{}) []interface{} {
+	result := make([]interface{}, 0, len(nodes))
+	for _, node := range nodes {
+		if n, ok := node.(map[string]interface{}); ok {
+			result = append(result, map[string]interface{}{
+				"host":     n["host"],
+				"port":     n["port"],
+				"weight":   n["weight"],
+				"priority": n["priority"],
+				"metadata": n["metadata"],
+			})
+		}
+	}
+	return result
 }
