@@ -307,14 +307,6 @@ class ResourceGenerator:
                         f.write(f"      {k} = {_format_json_value(v, 2)}\n")
                     f.write("    })\n")
                 f.write("  }\n")
-            if "plugins" in item and item["plugins"]:
-                f.write("  plugins = {\n")
-                for pname, pconf in item["plugins"].items():
-                    f.write(f'    "{pname}" = {{\n')
-                    for k, v in pconf.items():
-                        f.write(f"      {k} = {_format_value(v)}\n")
-                    f.write("    }\n")
-                f.write("  }\n")
 
         elif resource_type == "plugin_config":
             if "name" in item:
