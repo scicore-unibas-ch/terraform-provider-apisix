@@ -9,6 +9,15 @@ Scrapes APISIX Admin API to discover existing resources and generates:
 
 Usage:
     python scripts/import-apisix-resources.py [OPTIONS]
+
+Options:
+    --base-url              APISIX Admin API URL (default: http://localhost:9180/apisix/admin)
+    --admin-key             Admin API key (default: test123456789)
+    --output-dir            Output directory for generated files (default: ./import-output)
+    --provider-version      Provider version constraint (default: latest from registry)
+                            Examples: "0.2.0", ">= 0.1.0", "~> 0.1"
+    --provider-source       Provider source (default: scicore-unibas-ch/apisix)
+    --help                  Show this help message
 """
 
 import argparse
@@ -30,6 +39,30 @@ RESOURCE_TYPES = {
     'global_rule': {'endpoint': 'global_rules', 'id_field': 'id', 'name_field': 'name'},
     'ssl': {'endpoint': 'ssls', 'id_field': 'id', 'name_field': 'sni'},
 }
+
+def get_latest_provider_version(provider_source):
+    """Query OpenTofu Registry API to get latest provider version"""
+    try:
+        # OpenTofu Registry API endpoint
+        owner, name = provider_source.split('/')
+        url = f"https://registry.opentofu.org/v1/providers/{owner}/{name}/versions"
+        
+        req = Request(url)
+        req.add_header('Accept', 'application/json')
+        
+        with urlopen(req, timeout=10) as response:
+            data = json.loads(response.read().decode())
+            versions = data.get('versions', [])
+            if versions:
+                # Return the latest version (last in the list, assuming sorted)
+                latest = versions[-1]
+                print(f"✓ Found latest provider version: {latest}")
+                return latest
+    except Exception as e:
+        print(f"⚠ Could not fetch latest version from registry: {e}")
+        print("  Using default version constraint (will use latest available)")
+    
+    return None
 
 class APISIXClient:
     def __init__(self, base_url, admin_key):
@@ -59,8 +92,10 @@ class APISIXClient:
         return [item.get('value', item) for item in items]
 
 class ResourceGenerator:
-    def __init__(self, client):
+    def __init__(self, client, provider_source, provider_version):
         self.client = client
+        self.provider_source = provider_source
+        self.provider_version = provider_version
         self.resources = {}
     
     def discover_all(self):
@@ -299,16 +334,27 @@ class ResourceGenerator:
         """Generate separate .tf files for each resource type"""
         print(f"\n📝 Generating separate HCL files in: {output_dir}")
         
+        # Build version string
+        if self.provider_version:
+            version_line = f'      version = "{self.provider_version}"\n'
+            version_comment = f"# Using provider version: {self.provider_version}\n"
+        else:
+            version_line = ''
+            version_comment = "# Using latest available provider version\n"
+        
         # Write provider.tf
         provider_file = os.path.join(output_dir, 'provider.tf')
         with open(provider_file, 'w') as f:
             f.write(f"# APISIX Provider Configuration\n")
-            f.write(f"# Generated: {datetime.now().isoformat()}\n\n")
+            f.write(f"# Generated: {datetime.now().isoformat()}\n")
+            f.write(version_comment)
+            f.write(f"# Provider source: {self.provider_source}\n\n")
             f.write('terraform {\n')
             f.write('  required_providers {\n')
             f.write('    apisix = {\n')
-            f.write('      source  = "scicore-unibas-ch/apisix"\n')
-            f.write('      version = "0.1.0"\n')
+            f.write(f'      source  = "{self.provider_source}"\n')
+            if version_line:
+                f.write(version_line)
             f.write('    }\n')
             f.write('  }\n')
             f.write('}\n\n')
@@ -368,8 +414,9 @@ class ResourceGenerator:
             f.write('echo ""\n')
             f.write('echo "Next steps:"\n')
             f.write('1. Review generated .tf files and customize as needed\n')
-            f.write('2. Run: tofu plan\n')
-            f.write('3. Run: tofu apply\n')
+            f.write('2. Run: tofu init\n')
+            f.write('3. Run: tofu plan\n')
+            f.write('4. Run: tofu apply\n')
         
         os.chmod(output_file, 0o755)
         print(f"  ✅ Generated import.sh")
@@ -379,6 +426,13 @@ class ResourceGenerator:
         with open(output_file, 'w') as f:
             f.write('# APISIX Import Results\n\n')
             f.write(f'Generated: {datetime.now().isoformat()}\n\n')
+            f.write(f'## Provider Information\n\n')
+            f.write(f'- **Source**: `{self.provider_source}`\n')
+            if self.provider_version:
+                f.write(f'- **Version**: {self.provider_version}\n')
+            else:
+                f.write(f'- **Version**: Latest available from registry\n')
+            f.write('\n')
             total = sum(len(items) for items in self.resources.values())
             f.write(f'## Summary\n\n')
             f.write(f'Total resources discovered: **{total}**\n\n')
@@ -398,35 +452,73 @@ class ResourceGenerator:
             f.write('```bash\n')
             f.write('# 1. Review and customize generated files\n')
             f.write('vim *.tf\n\n')
-            f.write('# 2. Run the import script\n')
+            f.write('# 2. Initialize Terraform/OpenTofu\n')
+            f.write('tofu init\n\n')
+            f.write('# 3. Run the import script\n')
             f.write('./import.sh\n\n')
-            f.write('# 3. Verify the import\n')
+            f.write('# 4. Verify the import\n')
             f.write('tofu plan\n\n')
-            f.write('# 4. Apply (if needed)\n')
+            f.write('# 5. Apply (if needed)\n')
             f.write('tofu apply\n')
             f.write('```\n\n')
             f.write('## Important Notes\n\n')
             f.write('- **Review all generated HCL**: Some values may need manual adjustment\n')
             f.write('- **SSL certificates**: Exported if available from APISIX\n')
             f.write('- **Sensitive data**: Review and secure any sensitive configuration\n')
-            f.write('- **Provider version**: Update the provider version in provider.tf as needed\n')
+            if self.provider_version:
+                f.write(f'- **Provider version**: Locked to {self.provider_version}\n')
+            else:
+                f.write('- **Provider version**: Will use latest available from registry\n')
         print(f"  ✅ Generated README.md")
 
 def main():
-    parser = argparse.ArgumentParser(description='Import APISIX resources to Terraform')
+    parser = argparse.ArgumentParser(
+        description='Import APISIX resources to Terraform/OpenTofu',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog='''
+Examples:
+  # Use latest provider version from registry (default)
+  python import-apisix-resources.py
+
+  # Specify exact version
+  python import-apisix-resources.py --provider-version 0.2.0
+
+  # Use version constraint
+  python import-apisix-resources.py --provider-version ">= 0.1.0"
+
+  # Custom APISIX instance
+  python import-apisix-resources.py --base-url http://apisix.example.com:9180/apisix/admin --admin-key your-key
+
+  # Custom output directory
+  python import-apisix-resources.py --output-dir ./my-import
+        '''
+    )
     parser.add_argument('--base-url', default='http://localhost:9180/apisix/admin',
-                       help='APISIX Admin API URL')
+                       help='APISIX Admin API URL (default: http://localhost:9180/apisix/admin)')
     parser.add_argument('--admin-key', default='test123456789',
-                       help='Admin API key')
+                       help='Admin API key (default: test123456789)')
     parser.add_argument('--output-dir', default='./import-output',
-                       help='Output directory for generated files')
+                       help='Output directory for generated files (default: ./import-output)')
+    parser.add_argument('--provider-version', default=None,
+                       help='Provider version constraint (default: latest from registry). Examples: "0.2.0", ">= 0.1.0", "~> 0.1"')
+    parser.add_argument('--provider-source', default='scicore-unibas-ch/apisix',
+                       help='Provider source (default: scicore-unibas-ch/apisix)')
+    
     args = parser.parse_args()
+    
+    # Get latest version if not specified
+    provider_version = args.provider_version
+    if not provider_version:
+        print("📦 Fetching latest provider version from OpenTofu Registry...")
+        provider_version = get_latest_provider_version(args.provider_source)
+        if not provider_version:
+            print("  Will not specify version constraint (OpenTofu will use latest)")
     
     os.makedirs(args.output_dir, exist_ok=True)
     print(f"🔌 Connecting to APISIX: {args.base_url}")
     
     client = APISIXClient(args.base_url, args.admin_key)
-    generator = ResourceGenerator(client)
+    generator = ResourceGenerator(client, args.provider_source, provider_version)
     generator.discover_all()
     generator.generate_separate_files(args.output_dir)
     generator.generate_import_script(os.path.join(args.output_dir, 'import.sh'))
