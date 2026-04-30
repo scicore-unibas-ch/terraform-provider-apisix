@@ -1,39 +1,27 @@
 #!/usr/bin/env python3
 """
-APISIX Resource Importer
-
-Scrapes APISIX Admin API to discover existing resources and generates:
-1. HCL configuration files (main.tf)
-2. Import script (import.sh)
-3. Import state commands
-
-Usage:
-    python import-apisix-resources.py [OPTIONS]
-
-Options:
-    --base-url      APISIX Admin API URL (default: http://localhost:9180/apisix/admin)
-    --admin-key     Admin API key (default: test123456789)
-    --output-dir    Output directory for generated files (default: ./import-output)
-    --help          Show this help message
+APISIX Resource Importer - Fixed v2
 """
+# ... (same imports)
 
 import argparse
 import json
 import os
 import sys
+import re
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 from datetime import datetime
 
 RESOURCE_TYPES = {
-    'upstream': {'endpoint': 'upstreams', 'id_field': 'id'},
-    'route': {'endpoint': 'routes', 'id_field': 'id'},
-    'service': {'endpoint': 'services', 'id_field': 'id'},
-    'consumer': {'endpoint': 'consumers', 'id_field': 'username'},
-    'consumer_group': {'endpoint': 'consumer_groups', 'id_field': 'id'},
-    'plugin_config': {'endpoint': 'plugin_configs', 'id_field': 'id'},
-    'global_rule': {'endpoint': 'global_rules', 'id_field': 'id'},
-    'ssl': {'endpoint': 'ssls', 'id_field': 'id'},
+    'upstream': {'endpoint': 'upstreams', 'id_field': 'id', 'name_field': 'name'},
+    'route': {'endpoint': 'routes', 'id_field': 'id', 'name_field': 'name'},
+    'service': {'endpoint': 'services', 'id_field': 'id', 'name_field': 'name'},
+    'consumer': {'endpoint': 'consumers', 'id_field': 'username', 'name_field': 'username'},
+    'consumer_group': {'endpoint': 'consumer_groups', 'id_field': 'id', 'name_field': 'name'},
+    'plugin_config': {'endpoint': 'plugin_configs', 'id_field': 'id', 'name_field': 'name'},
+    'global_rule': {'endpoint': 'global_rules', 'id_field': 'id', 'name_field': 'name'},
+    'ssl': {'endpoint': 'ssls', 'id_field': 'id', 'name_field': 'sni'},
 }
 
 class APISIXClient:
@@ -59,7 +47,9 @@ class APISIXClient:
     def list_resources(self, resource_type):
         config = RESOURCE_TYPES[resource_type]
         response = self._request(config['endpoint'])
-        return response.get('list', [])
+        items = response.get('list', [])
+        # Extract the 'value' from each item (APISIX wraps resources in 'value')
+        return [item.get('value', item) for item in items]
 
 class ResourceGenerator:
     def __init__(self, client):
@@ -74,6 +64,18 @@ class ResourceGenerator:
             self.resources[resource_type] = resources
             print(f"    Found {len(resources)} {resource_type}(s)")
         return self.resources
+    
+    def _get_resource_id(self, resource_type, item):
+        config = RESOURCE_TYPES.get(resource_type, {})
+        id_field = config.get('id_field', 'id')
+        resource_id = item.get(id_field) or item.get('id') or 'unknown'
+        return str(resource_id)
+    
+    def _generate_resource_name(self, resource_id, resource_type):
+        name = re.sub(r'[^a-zA-Z0-9_]', '_', resource_id)
+        if name[0].isdigit():
+            name = 'r_' + name
+        return f"{name}_{resource_type}"
     
     def generate_hcl(self, output_file):
         print(f"\n📝 Generating HCL: {output_file}")
@@ -98,20 +100,18 @@ class ResourceGenerator:
                     continue
                 f.write(f"# {'='*60}\n# {resource_type.upper()}\n# {'='*60}\n\n")
                 for item in items:
-                    resource_id = item.get(RESOURCE_TYPES[resource_type]['id_field'], 'unknown')
-                    resource_name = resource_id.replace('.', '_').replace('-', '_').lower()
+                    resource_id = self._get_resource_id(resource_type, item)
+                    resource_name = self._generate_resource_name(resource_id, resource_type)
                     f.write(f'resource "apisix_{resource_type}" "{resource_name}" {{\n')
-                    if 'name' in item:
-                        f.write(f'  name = "{item["name"]}"\n')
-                    if resource_type == 'consumer':
-                        f.write(f'  username = "{item.get("username", "")}"\n')
-                    if 'uri' in item:
-                        f.write(f'  uri = "{item["uri"]}"\n')
-                    if 'type' in item:
+                    f.write(f'  id = "{resource_id}"\n')
+                    name_field = RESOURCE_TYPES[resource_type].get('name_field', 'name')
+                    if name_field in item:
+                        f.write(f'  name = "{item[name_field]}"\n')
+                    if resource_type == 'upstream' and 'type' in item:
                         f.write(f'  type = "{item["type"]}"\n')
-                    if 'sni' in item:
-                        f.write(f'  sni = "{item["sni"]}"\n')
-                    if 'plugins' in item:
+                    if resource_type == 'route' and 'uri' in item:
+                        f.write(f'  uri = "{item["uri"]}"\n')
+                    if 'plugins' in item and item['plugins']:
                         f.write('  plugins = {\n')
                         for pname, pconf in item['plugins'].items():
                             f.write(f'    "{pname}" = jsonencode({json.dumps(pconf)})\n')
@@ -131,8 +131,8 @@ class ResourceGenerator:
                     continue
                 f.write(f'echo "Importing {resource_type}..."\n')
                 for item in items:
-                    resource_id = item.get(RESOURCE_TYPES[resource_type]['id_field'], 'unknown')
-                    resource_name = resource_id.replace('.', '_').replace('-', '_').lower()
+                    resource_id = self._get_resource_id(resource_type, item)
+                    resource_name = self._generate_resource_name(resource_id, resource_type)
                     f.write(f'tofu import apisix_{resource_type}.{resource_name} "{resource_id}"\n')
                 f.write('\n')
             f.write('echo "✅ Import complete!"\n')
@@ -149,8 +149,6 @@ class ResourceGenerator:
             f.write('| Resource | Count |\n|----------|-------|\n')
             for rtype, items in self.resources.items():
                 f.write(f'| {rtype} | {len(items)} |\n')
-            f.write('\n## Usage\n```bash\n')
-            f.write('./import.sh\ntofu plan\n```\n')
         print(f"  ✅ Generated")
 
 def main():
@@ -159,17 +157,14 @@ def main():
     parser.add_argument('--admin-key', default='test123456789')
     parser.add_argument('--output-dir', default='./import-output')
     args = parser.parse_args()
-    
     os.makedirs(args.output_dir, exist_ok=True)
     print(f"🔌 Connecting to APISIX: {args.base_url}")
-    
     client = APISIXClient(args.base_url, args.admin_key)
     generator = ResourceGenerator(client)
     generator.discover_all()
     generator.generate_hcl(os.path.join(args.output_dir, 'main.tf'))
     generator.generate_import_script(os.path.join(args.output_dir, 'import.sh'))
     generator.generate_readme(os.path.join(args.output_dir, 'README.md'))
-    
     print(f"\n✅ Complete! Output: {os.path.abspath(args.output_dir)}")
 
 if __name__ == '__main__':
