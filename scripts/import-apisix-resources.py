@@ -9,15 +9,6 @@ Scrapes APISIX Admin API to discover existing resources and generates:
 
 Usage:
     python scripts/import-apisix-resources.py [OPTIONS]
-
-Options:
-    --base-url              APISIX Admin API URL (default: http://localhost:9180/apisix/admin)
-    --admin-key             Admin API key (default: test123456789)
-    --output-dir            Output directory for generated files (default: ./import-output)
-    --provider-version      Provider version constraint (default: latest from registry)
-                            Examples: "0.2.0", ">= 0.1.0", "~> 0.1"
-    --provider-source       Provider source (default: scicore-unibas-ch/apisix)
-    --help                  Show this help message
 """
 
 import argparse
@@ -40,28 +31,29 @@ RESOURCE_TYPES = {
     'ssl': {'endpoint': 'ssls', 'id_field': 'id', 'name_field': 'sni'},
 }
 
+# Read-only fields that should NOT be written to HCL
+READONLY_FIELDS = {
+    'id', 'create_time', 'update_time', 'createdIndex', 'modifiedIndex',
+    'key', 'value'
+}
+
 def get_latest_provider_version(provider_source):
     """Query OpenTofu Registry API to get latest provider version"""
     try:
-        # OpenTofu Registry API endpoint
         owner, name = provider_source.split('/')
         url = f"https://registry.opentofu.org/v1/providers/{owner}/{name}/versions"
-        
         req = Request(url)
         req.add_header('Accept', 'application/json')
-        
         with urlopen(req, timeout=10) as response:
             data = json.loads(response.read().decode())
             versions = data.get('versions', [])
             if versions:
-                # Return the latest version (last in the list, assuming sorted)
                 latest = versions[-1]
                 print(f"✓ Found latest provider version: {latest}")
                 return latest
     except Exception as e:
         print(f"⚠ Could not fetch latest version from registry: {e}")
-        print("  Using default version constraint (will use latest available)")
-    
+        print("  Using no version constraint (will use latest available)")
     return None
 
 class APISIXClient:
@@ -88,7 +80,6 @@ class APISIXClient:
         config = RESOURCE_TYPES[resource_type]
         response = self._request(config['endpoint'])
         items = response.get('list', [])
-        # Extract the 'value' from each item (APISIX wraps resources in 'value')
         return [item.get('value', item) for item in items]
 
 class ResourceGenerator:
@@ -120,29 +111,19 @@ class ResourceGenerator:
         return f"{name}_{resource_type}"
     
     def _write_resource_attributes(self, f, resource_type, item):
-        """Write resource-specific attributes"""
-        # Write ID
-        resource_id = self._get_resource_id(resource_type, item)
-        f.write(f'  id = "{resource_id}"\n')
-        
-        # Write name if available
-        name_field = RESOURCE_TYPES[resource_type].get('name_field', 'name')
-        if name_field in item:
-            f.write(f'  name = "{item[name_field]}"\n')
-        
-        # Write description if available
-        if 'desc' in item:
-            f.write(f'  desc = "{item["desc"]}"\n')
+        """Write ONLY configurable attributes (exclude read-only fields)"""
         
         # Upstream-specific fields
         if resource_type == 'upstream':
+            if 'name' in item:
+                f.write(f'  name = "{item["name"]}"\n')
             if 'type' in item:
                 f.write(f'  type = "{item["type"]}"\n')
             if 'scheme' in item:
                 f.write(f'  scheme = "{item["scheme"]}"\n')
             if 'hash_on' in item:
                 f.write(f'  hash_on = "{item["hash_on"]}"\n')
-            if 'key' in item:
+            if 'key' in item and resource_type != 'upstream':  # 'key' is readonly for upstream
                 f.write(f'  key = "{item["key"]}"\n')
             if 'retries' in item:
                 f.write(f'  retries = {item["retries"]}\n')
@@ -160,8 +141,6 @@ class ResourceGenerator:
                     f.write(f'    weight   = {node.get("weight", 100)}\n')
                     if 'priority' in node:
                         f.write(f'    priority = {node["priority"]}\n')
-                    if 'metadata' in node:
-                        f.write(f'    metadata = {json.dumps(node["metadata"])}\n')
                 f.write('  }\n')
             if 'timeout' in item:
                 f.write('  timeout {\n')
@@ -196,6 +175,8 @@ class ResourceGenerator:
         
         # Route-specific fields
         if resource_type == 'route':
+            if 'name' in item:
+                f.write(f'  name = "{item["name"]}"\n')
             if 'uri' in item:
                 f.write(f'  uri = "{item["uri"]}"\n')
             if 'uris' in item and isinstance(item['uris'], list):
@@ -236,6 +217,8 @@ class ResourceGenerator:
         
         # Service-specific fields
         if resource_type == 'service':
+            if 'name' in item:
+                f.write(f'  name = "{item["name"]}"\n')
             if 'upstream_id' in item:
                 f.write(f'  upstream_id = "{item["upstream_id"]}"\n')
             if 'hosts' in item and isinstance(item['hosts'], list):
@@ -263,8 +246,8 @@ class ResourceGenerator:
         
         # Consumer Group-specific fields
         if resource_type == 'consumer_group':
-            if 'id' in item:
-                f.write(f'  group_id = "{item["id"]}"\n')
+            if 'name' in item:
+                f.write(f'  name = "{item["name"]}"\n')
             if 'labels' in item and item['labels']:
                 f.write('  labels = {\n')
                 for key, value in item['labels'].items():
@@ -278,6 +261,8 @@ class ResourceGenerator:
         
         # Plugin Config-specific fields
         if resource_type == 'plugin_config':
+            if 'name' in item:
+                f.write(f'  name = "{item["name"]}"\n')
             if 'desc' in item:
                 f.write(f'  desc = "{item["desc"]}"\n')
             if 'plugins' in item and item['plugins']:
@@ -334,7 +319,6 @@ class ResourceGenerator:
         """Generate separate .tf files for each resource type"""
         print(f"\n📝 Generating separate HCL files in: {output_dir}")
         
-        # Build version string
         if self.provider_version:
             version_line = f'      version = "{self.provider_version}"\n'
             version_comment = f"# Using provider version: {self.provider_version}\n"
@@ -342,7 +326,6 @@ class ResourceGenerator:
             version_line = ''
             version_comment = "# Using latest available provider version\n"
         
-        # Write provider.tf
         provider_file = os.path.join(output_dir, 'provider.tf')
         with open(provider_file, 'w') as f:
             f.write(f"# APISIX Provider Configuration\n")
@@ -364,7 +347,6 @@ class ResourceGenerator:
             f.write('}\n')
         print(f"  ✅ Generated provider.tf")
         
-        # Write one file per resource type
         for resource_type, items in self.resources.items():
             if not items:
                 print(f"  ⊘ Skipping {resource_type} (no resources)")
@@ -401,7 +383,6 @@ class ResourceGenerator:
             for resource_type, items in self.resources.items():
                 if not items:
                     continue
-                
                 f.write(f'echo "=== Importing {resource_type.replace("_", " ").title()} ==="\n')
                 for item in items:
                     resource_id = self._get_resource_id(resource_type, item)
@@ -472,41 +453,15 @@ class ResourceGenerator:
         print(f"  ✅ Generated README.md")
 
 def main():
-    parser = argparse.ArgumentParser(
-        description='Import APISIX resources to Terraform/OpenTofu',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog='''
-Examples:
-  # Use latest provider version from registry (default)
-  python import-apisix-resources.py
-
-  # Specify exact version
-  python import-apisix-resources.py --provider-version 0.2.0
-
-  # Use version constraint
-  python import-apisix-resources.py --provider-version ">= 0.1.0"
-
-  # Custom APISIX instance
-  python import-apisix-resources.py --base-url http://apisix.example.com:9180/apisix/admin --admin-key your-key
-
-  # Custom output directory
-  python import-apisix-resources.py --output-dir ./my-import
-        '''
-    )
-    parser.add_argument('--base-url', default='http://localhost:9180/apisix/admin',
-                       help='APISIX Admin API URL (default: http://localhost:9180/apisix/admin)')
-    parser.add_argument('--admin-key', default='test123456789',
-                       help='Admin API key (default: test123456789)')
-    parser.add_argument('--output-dir', default='./import-output',
-                       help='Output directory for generated files (default: ./import-output)')
-    parser.add_argument('--provider-version', default=None,
-                       help='Provider version constraint (default: latest from registry). Examples: "0.2.0", ">= 0.1.0", "~> 0.1"')
-    parser.add_argument('--provider-source', default='scicore-unibas-ch/apisix',
-                       help='Provider source (default: scicore-unibas-ch/apisix)')
+    parser = argparse.ArgumentParser(description='Import APISIX resources to Terraform/OpenTofu')
+    parser.add_argument('--base-url', default='http://localhost:9180/apisix/admin')
+    parser.add_argument('--admin-key', default='test123456789')
+    parser.add_argument('--output-dir', default='./import-output')
+    parser.add_argument('--provider-version', default=None)
+    parser.add_argument('--provider-source', default='scicore-unibas-ch/apisix')
     
     args = parser.parse_args()
     
-    # Get latest version if not specified
     provider_version = args.provider_version
     if not provider_version:
         print("📦 Fetching latest provider version from OpenTofu Registry...")
@@ -525,13 +480,6 @@ Examples:
     generator.generate_readme(os.path.join(args.output_dir, 'README.md'))
     
     print(f"\n✅ Complete! Output: {os.path.abspath(args.output_dir)}")
-    print(f"\n📁 Generated files:")
-    print(f"   - provider.tf (provider configuration)")
-    for rtype, items in generator.resources.items():
-        if items:
-            print(f"   - {rtype}s.tf ({len(items)} resources)")
-    print(f"   - import.sh (import script)")
-    print(f"   - README.md (documentation)")
 
 if __name__ == '__main__':
     main()
