@@ -20,13 +20,8 @@ test-acceptance:
 		sleep 2; \
 	done
 	@echo ""
-	@echo "Running acceptance tests (excluding SSL - requires manual setup)..."
+	@echo "Running acceptance tests..."
 	@for test in tests/acceptance/*/test.sh; do \
-		test_name=$$(basename $$(dirname $$test)); \
-		if [ "$$test_name" = "ssl" ]; then \
-			echo "⊘ Skipping $$test (SSL tests require manual execution)"; \
-			continue; \
-		fi; \
 		echo "Running $$test..."; \
 		if ! bash $$test; then \
 			echo "✗ $$test FAILED"; \
@@ -35,7 +30,7 @@ test-acceptance:
 		fi; \
 	done
 	@echo ""
-	@echo "✓ All acceptance tests passed (7/8 resources tested, SSL skipped)"
+	@echo "✓ All acceptance tests passed"
 	@echo "Stopping APISIX cluster..."
 	docker compose -f tests/docker-compose.yml down -v
 

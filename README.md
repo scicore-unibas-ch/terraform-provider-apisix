@@ -54,12 +54,6 @@ This provider supports the following APISIX resources:
   - IP restrictions
   - Logging and tracing
 
-- **`apisix_ssl`** - Manage SSL/TLS certificates
-  - Multiple SNI support
-  - mTLS (mutual TLS) configuration
-  - TLS version control
-  - Certificate rotation
-
 ## Requirements
 
 - **Terraform/OpenTofu**: >= 1.0
@@ -190,7 +184,6 @@ Full documentation is available in the [`docs/`](docs/) directory:
 - [Consumer Group Resource](docs/resources/consumer_group.md)
 - [Plugin Config Resource](docs/resources/plugin_config.md)
 - [Global Rule Resource](docs/resources/global_rule.md)
-- [SSL Resource](docs/resources/ssl.md)
 
 ## Development
 
