@@ -1,80 +1,139 @@
+// Package provider is the Plugin Framework provider entrypoint.
 package provider
 
 import (
 	"context"
+	"os"
+	"time"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/scicore-unibas-ch/terraform-provider-apisix/internal/apisix"
-	"github.com/scicore-unibas-ch/terraform-provider-apisix/internal/resources"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/provider"
+	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/scicore-unibas-ch/terraform-provider-apisix/internal/client"
+	consumerres "github.com/scicore-unibas-ch/terraform-provider-apisix/internal/resource/consumer"
+	consumergroupres "github.com/scicore-unibas-ch/terraform-provider-apisix/internal/resource/consumergroup"
+	globalruleres "github.com/scicore-unibas-ch/terraform-provider-apisix/internal/resource/globalrule"
+	pluginconfigres "github.com/scicore-unibas-ch/terraform-provider-apisix/internal/resource/pluginconfig"
+	routeres "github.com/scicore-unibas-ch/terraform-provider-apisix/internal/resource/route"
+	serviceres "github.com/scicore-unibas-ch/terraform-provider-apisix/internal/resource/service"
+	upstreamres "github.com/scicore-unibas-ch/terraform-provider-apisix/internal/resource/upstream"
 )
 
-func Provider() *schema.Provider {
-	return &schema.Provider{
-		Schema: map[string]*schema.Schema{
-			"base_url": {
-				Type:        schema.TypeString,
-				Required:    true,
-				DefaultFunc: schema.EnvDefaultFunc("APISIX_BASE_URL", nil),
-				Description: "The base URL of the APISIX Admin API (e.g., http://localhost:9180/apisix/admin). Can be set via APISIX_BASE_URL environment variable.",
-			},
-			"admin_key": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Sensitive:   true,
-				DefaultFunc: schema.EnvDefaultFunc("APISIX_ADMIN_KEY", nil),
-				Description: "The API key for authenticating with the APISIX Admin API. Can be set via APISIX_ADMIN_KEY environment variable.",
-			},
-			"timeout": {
-				Type:        schema.TypeInt,
+var (
+	_ provider.Provider = (*apisixProvider)(nil)
+)
+
+type apisixProvider struct {
+	version string
+}
+
+type providerModel struct {
+	BaseURL  types.String `tfsdk:"base_url"`
+	AdminKey types.String `tfsdk:"admin_key"`
+	Timeout  types.Int64  `tfsdk:"timeout"`
+	Insecure types.Bool   `tfsdk:"insecure"`
+}
+
+// New returns a Plugin Framework provider factory.
+func New(version string) func() provider.Provider {
+	return func() provider.Provider { return &apisixProvider{version: version} }
+}
+
+func (p *apisixProvider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
+	resp.TypeName = "apisix"
+	resp.Version = p.version
+}
+
+func (p *apisixProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Description: "Provider for the Apache APISIX Admin API.",
+		Attributes: map[string]schema.Attribute{
+			"base_url": schema.StringAttribute{
 				Optional:    true,
-				Default:     30,
-				Description: "HTTP client timeout in seconds. Defaults to 30.",
+				Description: "Base URL of the APISIX Admin API (e.g. http://localhost:9180/apisix/admin). Falls back to APISIX_BASE_URL.",
+			},
+			"admin_key": schema.StringAttribute{
+				Optional:    true,
+				Sensitive:   true,
+				Description: "Admin API key. Falls back to APISIX_ADMIN_KEY.",
+			},
+			"timeout": schema.Int64Attribute{
+				Optional:    true,
+				Description: "HTTP client timeout in seconds. Default: 30.",
+			},
+			"insecure": schema.BoolAttribute{
+				Optional:    true,
+				Description: "Skip TLS certificate verification. Default: false.",
 			},
 		},
-		ResourcesMap: map[string]*schema.Resource{
-			"apisix_upstream":       resources.ResourceApisixUpstream(),
-			"apisix_route":          resources.ResourceApisixRoute(),
-			"apisix_service":        resources.ResourceApisixService(),
-			"apisix_consumer":       resources.ResourceApisixConsumer(),
-			"apisix_consumer_group": resources.ResourceApisixConsumerGroup(),
-			"apisix_ssl":            resources.ResourceApisixSSL(),
-			"apisix_plugin_config":  resources.ResourceApisixPluginConfig(),
-			"apisix_global_rule":    resources.ResourceApisixGlobalRule(),
-		},
-		ConfigureContextFunc: providerConfigure,
 	}
 }
 
-func providerConfigure(ctx context.Context, d *schema.ResourceData) (interface{}, diag.Diagnostics) {
-	baseURL := d.Get("base_url").(string)
-	adminKey := d.Get("admin_key").(string)
-	timeout := d.Get("timeout").(int)
+func (p *apisixProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
+	var cfg providerModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
-	// Validate base_url
+	baseURL := cfg.BaseURL.ValueString()
 	if baseURL == "" {
-		return nil, diag.Errorf("base_url is required")
+		baseURL = os.Getenv("APISIX_BASE_URL")
 	}
-
-	// Validate admin_key
+	adminKey := cfg.AdminKey.ValueString()
 	if adminKey == "" {
-		return nil, diag.Errorf("admin_key is required")
+		adminKey = os.Getenv("APISIX_ADMIN_KEY")
 	}
 
-	// Create APISIX client
-	client := apisix.NewClient(baseURL, adminKey, timeout)
+	if baseURL == "" {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("base_url"),
+			"Missing base_url",
+			"Set the base_url attribute or the APISIX_BASE_URL environment variable.",
+		)
+	}
+	if adminKey == "" {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("admin_key"),
+			"Missing admin_key",
+			"Set the admin_key attribute or the APISIX_ADMIN_KEY environment variable.",
+		)
+	}
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
-	return client, nil
+	timeoutSec := int64(30)
+	if !cfg.Timeout.IsNull() && !cfg.Timeout.IsUnknown() {
+		timeoutSec = cfg.Timeout.ValueInt64()
+	}
+
+	c := client.New(client.Config{
+		BaseURL:  baseURL,
+		AdminKey: adminKey,
+		Timeout:  time.Duration(timeoutSec) * time.Second,
+		Insecure: cfg.Insecure.ValueBool(),
+	})
+	resp.ResourceData = c
+	resp.DataSourceData = c
 }
 
-// GetClient retrieves the APISIX client from the provider meta
-func GetClient(meta interface{}) (*apisix.Client, error) {
-	if meta == nil {
-		return nil, nil
+func (p *apisixProvider) Resources(_ context.Context) []func() resource.Resource {
+	return []func() resource.Resource{
+		consumerres.NewResource,
+		consumergroupres.NewResource,
+		globalruleres.NewResource,
+		pluginconfigres.NewResource,
+		routeres.NewResource,
+		serviceres.NewResource,
+		upstreamres.NewResource,
 	}
-	client, ok := meta.(*apisix.Client)
-	if !ok {
-		return nil, nil
-	}
-	return client, nil
+}
+
+func (p *apisixProvider) DataSources(_ context.Context) []func() datasource.DataSource {
+	return nil
 }

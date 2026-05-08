@@ -1,12 +1,27 @@
 package main
 
 import (
-	"github.com/hashicorp/terraform-plugin-sdk/v2/plugin"
+	"context"
+	"flag"
+	"log"
+
+	"github.com/hashicorp/terraform-plugin-framework/providerserver"
+
 	"github.com/scicore-unibas-ch/terraform-provider-apisix/internal/provider"
 )
 
+var version = "dev"
+
 func main() {
-	plugin.Serve(&plugin.ServeOpts{
-		ProviderFunc: provider.Provider,
+	var debug bool
+	flag.BoolVar(&debug, "debug", false, "run with debugger support")
+	flag.Parse()
+
+	err := providerserver.Serve(context.Background(), provider.New(version), providerserver.ServeOpts{
+		Address: "registry.opentofu.org/scicore-unibas-ch/apisix",
+		Debug:   debug,
 	})
+	if err != nil {
+		log.Fatal(err.Error())
+	}
 }
