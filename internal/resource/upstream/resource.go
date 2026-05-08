@@ -507,7 +507,7 @@ func buildNodes(ctx context.Context, list types.List) ([]apiNode, diag.Diagnosti
 	}
 
 	out := make([]apiNode, 0, len(nodes))
-	for i, n := range nodes {
+	for _, n := range nodes {
 		node := apiNode{
 			Host:     n.Host.ValueString(),
 			Port:     n.Port.ValueInt64(),
@@ -523,7 +523,6 @@ func buildNodes(ctx context.Context, list types.List) ([]apiNode, diag.Diagnosti
 			node.Metadata = md
 		}
 		out = append(out, node)
-		_ = i
 	}
 	return out, diags
 }
