@@ -49,6 +49,13 @@ jobs:
             sleep 2
           done
 
+      # Static checks and unit tests
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test ./...
+
       # Build provider
       - name: Build provider binary
         run: go build -o terraform-provider-apisix .
@@ -81,8 +88,6 @@ jobs:
       - name: Run global_rule acceptance tests
         working-directory: tests/acceptance/global_rule
         run: ./test.sh
-
-      # SSL tests skipped - documented in README
 
       # Cleanup ONCE after all tests
       - name: Stop APISIX cluster
