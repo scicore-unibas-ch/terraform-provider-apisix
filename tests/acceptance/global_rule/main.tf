@@ -1,8 +1,7 @@
 terraform {
   required_providers {
     apisix = {
-      source  = "scicore-unibas-ch/apisix"
-      version = "0.1.0"
+      source = "scicore-unibas-ch/apisix"
     }
   }
 }
@@ -18,9 +17,13 @@ variable "apisix_admin_key" {
   sensitive = true
 }
 
-# Basic global rule with limit-count
+provider "apisix" {
+  base_url  = var.apisix_base_url
+  admin_key = var.apisix_admin_key
+}
+
 resource "apisix_global_rule" "basic" {
-  rule_id = "test-gr-basic"
+  id = "test-gr-basic"
 
   plugins = {
     "limit-count" = jsonencode({
@@ -31,9 +34,8 @@ resource "apisix_global_rule" "basic" {
   }
 }
 
-# Global rule with multiple plugins (cors + limit-req instead of limit-count)
 resource "apisix_global_rule" "multi_plugins" {
-  rule_id = "test-gr-multi"
+  id = "test-gr-multi"
 
   plugins = {
     "cors" = jsonencode({
@@ -41,16 +43,15 @@ resource "apisix_global_rule" "multi_plugins" {
       allow_methods = "*"
     })
     "limit-req" = jsonencode({
-      key = "remote_addr"
-      rate = 100
+      key   = "remote_addr"
+      rate  = 100
       burst = 50
     })
   }
 }
 
-# Global rule with IP restriction
 resource "apisix_global_rule" "ip_restriction" {
-  rule_id = "test-gr-ip"
+  id = "test-gr-ip"
 
   plugins = {
     "ip-restriction" = jsonencode({
@@ -59,9 +60,8 @@ resource "apisix_global_rule" "ip_restriction" {
   }
 }
 
-# Global rule for route integration test (uses response-rewrite instead of limit-count)
 resource "apisix_global_rule" "route_integration" {
-  rule_id = "test-gr-route"
+  id = "test-gr-route"
 
   plugins = {
     "response-rewrite" = jsonencode({
@@ -72,27 +72,24 @@ resource "apisix_global_rule" "route_integration" {
   }
 }
 
-# Upstream for route integration test
 resource "apisix_upstream" "test" {
+  id   = "test-gr-upstream"
   name = "test-gr-upstream"
   type = "roundrobin"
 
-  nodes {
-    host   = "127.0.0.1"
-    port   = 8080
-    weight = 100
-  }
+  nodes = [
+    {
+      host   = "127.0.0.1"
+      port   = 8080
+      weight = 100
+    },
+  ]
 }
 
-# Route for integration test
 resource "apisix_route" "with_global_rule" {
+  id          = "test-route-with-gr"
   name        = "test-route-with-gr"
   uri         = "/gr-test/*"
   upstream_id = apisix_upstream.test.id
   status      = 1
-}
-
-provider "apisix" {
-  base_url  = var.apisix_base_url
-  admin_key = var.apisix_admin_key
 }

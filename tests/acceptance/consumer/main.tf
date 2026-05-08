@@ -1,8 +1,7 @@
 terraform {
   required_providers {
     apisix = {
-      source  = "scicore-unibas-ch/apisix"
-      version = "0.1.0"
+      source = "scicore-unibas-ch/apisix"
     }
   }
 }
@@ -24,16 +23,14 @@ provider "apisix" {
   timeout   = 30
 }
 
-# Basic consumer
 resource "apisix_consumer" "basic" {
-  username = "test-consumer-basic"
-  desc     = "Basic consumer for testing"
+  id   = "test-consumer-basic"
+  desc = "Basic consumer for testing"
 }
 
-# Consumer with key-auth plugin
 resource "apisix_consumer" "key_auth" {
-  username = "test-consumer-key-auth"
-  desc     = "Consumer with key-auth plugin"
+  id   = "test-consumer-key-auth"
+  desc = "Consumer with key-auth plugin"
 
   plugins = {
     "key-auth" = jsonencode({
@@ -42,10 +39,9 @@ resource "apisix_consumer" "key_auth" {
   }
 }
 
-# Consumer with jwt-auth plugin
 resource "apisix_consumer" "jwt_auth" {
-  username = "test-consumer-jwt-auth"
-  desc     = "Consumer with jwt-auth plugin"
+  id   = "test-consumer-jwt-auth"
+  desc = "Consumer with jwt-auth plugin"
 
   plugins = {
     "jwt-auth" = jsonencode({
@@ -56,10 +52,9 @@ resource "apisix_consumer" "jwt_auth" {
   }
 }
 
-# Consumer with labels
 resource "apisix_consumer" "with_labels" {
-  username = "test-consumer-labels"
-  desc     = "Consumer with labels"
+  id   = "test-consumer-labels"
+  desc = "Consumer with labels"
 
   labels = {
     env        = "production"
@@ -68,10 +63,9 @@ resource "apisix_consumer" "with_labels" {
   }
 }
 
-# Consumer with group_id (requires consumer group)
 resource "apisix_consumer_group" "test_group" {
-  group_id = "test-consumer-group"
-  desc     = "Test consumer group for consumer testing"
+  id   = "test-consumer-group"
+  desc = "Test consumer group for consumer testing"
 
   plugins = {
     "limit-count" = jsonencode({
@@ -83,9 +77,9 @@ resource "apisix_consumer_group" "test_group" {
 }
 
 resource "apisix_consumer" "with_group" {
-  username = "test-consumer-with-group"
+  id       = "test-consumer-with-group"
   desc     = "Consumer with group_id"
-  group_id = apisix_consumer_group.test_group.group_id
+  group_id = apisix_consumer_group.test_group.id
 
   plugins = {
     "key-auth" = jsonencode({
@@ -94,10 +88,9 @@ resource "apisix_consumer" "with_group" {
   }
 }
 
-# Consumer with multiple auth plugins (hmac-auth)
 resource "apisix_consumer" "hmac_auth" {
-  username = "test-consumer-hmac-auth"
-  desc     = "Consumer with hmac-auth plugin"
+  id   = "test-consumer-hmac-auth"
+  desc = "Consumer with hmac-auth plugin"
 
   plugins = {
     "hmac-auth" = jsonencode({

@@ -1,8 +1,7 @@
 terraform {
   required_providers {
     apisix = {
-      source  = "scicore-unibas-ch/apisix"
-      version = "0.1.0"
+      source = "scicore-unibas-ch/apisix"
     }
   }
 }
@@ -24,12 +23,10 @@ provider "apisix" {
   timeout   = 30
 }
 
-# Basic consumer group
 resource "apisix_consumer_group" "basic" {
-  group_id = "test-group-basic"
-  desc     = "Basic consumer group for testing"
+  id   = "test-group-basic"
+  desc = "Basic consumer group for testing"
 
-  # Consumer groups require at least one plugin
   plugins = {
     "limit-count" = jsonencode({
       count         = 10000
@@ -39,10 +36,9 @@ resource "apisix_consumer_group" "basic" {
   }
 }
 
-# Consumer group with plugins
 resource "apisix_consumer_group" "with_plugins" {
-  group_id = "test-group-with-plugins"
-  desc     = "Consumer group with rate limiting plugins"
+  id   = "test-group-with-plugins"
+  desc = "Consumer group with rate limiting plugins"
 
   plugins = {
     "limit-count" = jsonencode({
@@ -54,10 +50,9 @@ resource "apisix_consumer_group" "with_plugins" {
   }
 }
 
-# Consumer group with multiple plugins
 resource "apisix_consumer_group" "multi_plugins" {
-  group_id = "test-group-multi-plugins"
-  desc     = "Consumer group with multiple plugins"
+  id   = "test-group-multi-plugins"
+  desc = "Consumer group with multiple plugins"
 
   plugins = {
     "limit-count" = jsonencode({
@@ -73,11 +68,10 @@ resource "apisix_consumer_group" "multi_plugins" {
   }
 }
 
-# Consumer group with name
 resource "apisix_consumer_group" "with_name" {
-  group_id = "test-group-with-name"
-  name     = "Premium Tier Group"
-  desc     = "Consumer group with name field"
+  id   = "test-group-with-name"
+  name = "Premium Tier Group"
+  desc = "Consumer group with name field"
 
   plugins = {
     "limit-count" = jsonencode({
@@ -88,10 +82,9 @@ resource "apisix_consumer_group" "with_name" {
   }
 }
 
-# Consumer group with labels
 resource "apisix_consumer_group" "with_labels" {
-  group_id = "test-group-labels"
-  desc     = "Consumer group with labels"
+  id   = "test-group-labels"
+  desc = "Consumer group with labels"
 
   plugins = {
     "limit-count" = jsonencode({
@@ -108,10 +101,9 @@ resource "apisix_consumer_group" "with_labels" {
   }
 }
 
-# Consumer group for consumer testing
 resource "apisix_consumer_group" "consumer_test" {
-  group_id = "test-group-consumer"
-  desc     = "Consumer group for testing consumer group_id"
+  id   = "test-group-consumer"
+  desc = "Consumer group for testing consumer group_id"
 
   plugins = {
     "limit-count" = jsonencode({

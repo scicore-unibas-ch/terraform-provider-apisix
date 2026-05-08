@@ -1,8 +1,7 @@
 terraform {
   required_providers {
     apisix = {
-      source  = "scicore-unibas-ch/apisix"
-      version = "0.1.0"
+      source = "scicore-unibas-ch/apisix"
     }
   }
 }
@@ -24,16 +23,29 @@ provider "apisix" {
   timeout   = 30
 }
 
-# Basic service
+resource "apisix_upstream" "test" {
+  id   = "service-test-upstream"
+  name = "service-test-upstream"
+
+  nodes = [
+    {
+      host   = "127.0.0.1"
+      port   = 8080
+      weight = 100
+    },
+  ]
+}
+
 resource "apisix_service" "basic" {
+  id   = "test-service-basic"
   name = "basic-service"
   desc = "Basic service for testing"
 
   upstream_id = apisix_upstream.test.id
 }
 
-# Service with hosts
 resource "apisix_service" "with_hosts" {
+  id   = "test-service-with-hosts"
   name = "service-with-hosts"
   desc = "Service with host matching"
 
@@ -42,8 +54,8 @@ resource "apisix_service" "with_hosts" {
   upstream_id = apisix_upstream.test.id
 }
 
-# Service with plugins
 resource "apisix_service" "with_plugins" {
+  id   = "test-service-with-plugins"
   name = "service-with-plugins"
   desc = "Service with plugin configuration"
 
@@ -63,30 +75,30 @@ resource "apisix_service" "with_plugins" {
   upstream_id = apisix_upstream.test.id
 }
 
-# Service with inline upstream
 resource "apisix_service" "with_upstream" {
+  id   = "test-service-with-upstream"
   name = "service-with-upstream"
   desc = "Service with inline upstream"
 
-  upstream {
+  upstream = {
     type = "roundrobin"
-
-    nodes {
-      host   = "127.0.0.1"
-      port   = 8080
-      weight = 100
-    }
-
-    nodes {
-      host   = "127.0.0.1"
-      port   = 8081
-      weight = 50
-    }
+    nodes = [
+      {
+        host   = "127.0.0.1"
+        port   = 8080
+        weight = 100
+      },
+      {
+        host   = "127.0.0.1"
+        port   = 8081
+        weight = 50
+      },
+    ]
   }
 }
 
-# Service with labels
 resource "apisix_service" "with_labels" {
+  id   = "test-service-with-labels"
   name = "service-with-labels"
   desc = "Service with labels"
 
@@ -101,12 +113,11 @@ resource "apisix_service" "with_labels" {
   }
 }
 
-# Service with script (custom Lua logic)
 resource "apisix_service" "with_script" {
+  id   = "test-service-with-script"
   name = "service-with-script"
   desc = "Service with custom Lua script"
 
-  # Script must be a valid Lua module string
   script = <<-EOT
 local _M = {}
 function _M.access(conf, ctx)
@@ -116,15 +127,4 @@ return _M
 EOT
 
   upstream_id = apisix_upstream.test.id
-}
-
-# Shared upstream for services
-resource "apisix_upstream" "test" {
-  name = "service-test-upstream"
-
-  nodes {
-    host   = "127.0.0.1"
-    port   = 8080
-    weight = 100
-  }
 }

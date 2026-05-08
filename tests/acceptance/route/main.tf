@@ -1,16 +1,9 @@
 terraform {
   required_providers {
     apisix = {
-      source  = "scicore-unibas-ch/apisix"
-      version = "0.1.0"
+      source = "scicore-unibas-ch/apisix"
     }
   }
-}
-
-provider "apisix" {
-  base_url  = var.apisix_base_url
-  admin_key = var.apisix_admin_key
-  timeout   = 30
 }
 
 variable "apisix_base_url" {
@@ -24,16 +17,24 @@ variable "apisix_admin_key" {
   sensitive = true
 }
 
-# Basic route with upstream_id
+provider "apisix" {
+  base_url  = var.apisix_base_url
+  admin_key = var.apisix_admin_key
+  timeout   = 30
+}
+
 resource "apisix_upstream" "route_test" {
+  id   = "route-test-upstream"
   name = "route-test-upstream"
   type = "roundrobin"
 
-  nodes {
-    host   = "127.0.0.1"
-    port   = 8080
-    weight = 100
-  }
+  nodes = [
+    {
+      host   = "127.0.0.1"
+      port   = 8080
+      weight = 100
+    },
+  ]
 
   labels = {
     test = "route"
@@ -41,19 +42,18 @@ resource "apisix_upstream" "route_test" {
 }
 
 resource "apisix_route" "basic" {
-  name = "test-route-basic"
-  uri  = "/api/*"
+  id  = "test-route-basic"
+  uri = "/api/*"
 
   upstream_id = apisix_upstream.route_test.id
 
   status = 1
 }
 
-# Route with multiple URIs and hosts
 resource "apisix_route" "advanced" {
-  name  = "test-route-advanced"
-  uris  = ["/api/*", "/v1/*"]
-  hosts = ["api.example.com", "api.test.com"]
+  id      = "test-route-advanced"
+  uris    = ["/api/*", "/v1/*"]
+  hosts   = ["api.example.com", "api.test.com"]
   methods = ["GET", "POST"]
 
   upstream_id = apisix_upstream.route_test.id
@@ -69,10 +69,9 @@ resource "apisix_route" "advanced" {
   status = 1
 }
 
-# Route with vars filtering
 resource "apisix_route" "with_vars" {
-  name = "test-route-with-vars"
-  uri  = "/admin/*"
+  id  = "test-route-with-vars"
+  uri = "/admin/*"
 
   vars = jsonencode([
     ["http_method", "==", "GET"],
@@ -85,29 +84,28 @@ resource "apisix_route" "with_vars" {
   status   = 1
 }
 
-# Route with all fields (comprehensive test)
+# Comprehensive route exercising the full inline upstream surface and timeouts.
 resource "apisix_route" "complete" {
-  name        = "test-route-complete"
-  desc        = "Complete route with all supported fields"
-  uris        = ["/complete/*"]
-  hosts       = ["complete.example.com"]
+  id           = "test-route-complete"
+  desc         = "Complete route with all supported fields"
+  uris         = ["/complete/*"]
+  hosts        = ["complete.example.com"]
   remote_addrs = ["10.0.0.0/8"]
-  methods     = ["GET", "POST", "PUT"]
-  priority    = 100
-  status      = 1
+  methods      = ["GET", "POST", "PUT"]
+  priority     = 100
+  status       = 1
 
-  # Using inline upstream instead of upstream_id
-  upstream {
+  upstream = {
     type = "roundrobin"
-
-    nodes {
-      host   = "127.0.0.1"
-      port   = 8080
-      weight = 100
-    }
+    nodes = [
+      {
+        host   = "127.0.0.1"
+        port   = 8080
+        weight = 100
+      },
+    ]
   }
 
-  # Plugin configuration
   plugins = {
     "limit-count" = jsonencode({
       count         = 500
@@ -116,8 +114,7 @@ resource "apisix_route" "complete" {
     })
   }
 
-  # Timeout configuration
-  timeout {
+  timeout = {
     connect = 5
     send    = 10
     read    = 15
@@ -132,14 +129,12 @@ resource "apisix_route" "complete" {
   }
 }
 
-# Route with custom Lua script (alternative to plugins)
+# Route exercising the script field (mutually exclusive with plugins).
 resource "apisix_route" "with_script" {
-  name = "test-route-with-script"
+  id   = "test-route-with-script"
   desc = "Route with custom Lua script"
   uri  = "/script/*"
 
-  # Script must be a valid Lua module string
-  # Note: Conflicts with `plugins` field - use one or the other
   script = <<-EOT
 local _M = {}
 function _M.access(conf, ctx)
