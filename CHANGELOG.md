@@ -6,9 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+This is the **0.2.0** rewrite. The provider has been rebuilt on the [Terraform Plugin Framework](https://developer.hashicorp.com/terraform/plugin/framework) (plugin protocol v6). It is a breaking change relative to 0.1.x; see the [Migration](#migrating-from-01x) section below.
+
 ### Changed (breaking)
 
-- **Provider rewritten on the Terraform Plugin Framework.** The previous SDK v2 implementation has been removed in favor of a Plugin Framework provider speaking plugin protocol v6.
+- **Provider rewritten on the Terraform Plugin Framework.** The previous SDK v2 implementation has been removed. The provider now speaks plugin protocol v6 and is verified against APISIX 3.13, 3.14, 3.15, and 3.16 in CI.
 - **`id` is now the explicit URL key on every resource** (`Required` + `RequiresReplace`). Previously the URL key was implicit (derived from `name`, `username`, `group_id`, `rule_id`, or `config_id`). All `.tf` files must add `id = "..."` to every resource.
 - **Nested objects use attribute syntax instead of block syntax**: `nodes = [{...}]`, `timeout = {...}`, `keepalive_pool = {...}`, `tls = {...}`, inline `upstream = {...}`. The previous SDK v2 block syntax (`nodes { ... }`) is no longer accepted.
 - **Cross-resource references that used the old per-resource keys must now use `.id`**: `apisix_consumer_group.x.group_id` → `apisix_consumer_group.x.id`, `apisix_plugin_config.x.config_id` → `apisix_plugin_config.x.id`.
@@ -16,11 +18,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - **Inline `upstream` block now exposes the full APISIX upstream surface** in `apisix_route` and `apisix_service` (scheme, timeouts, retries, hashing, keepalive, mTLS, service discovery, health checks). Previously inline upstreams supported only `type` and `nodes`.
-- **JSON-equivalence plan modifiers** for plugin maps and JSON-string fields (`vars`, `health_check`). APISIX's server-side normalization (key reordering, default injection) no longer produces perpetual diffs.
-- **HTTP retries with exponential backoff** on idempotent verbs (GET, PUT, DELETE) for transient 5xx and network errors.
-- **Validators** at plan time on `methods`, `port`, `status`, `type`, `scheme`, `hash_on`, `pass_host`.
+- **JSON-equivalence plan modifiers** (`internal/planmodifier/jsonmap`, `internal/planmodifier/jsonstring`) for plugin maps and JSON-string fields (`vars`, `health_check`). APISIX's server-side normalization (key reordering, default injection) no longer produces perpetual diffs. Both modifiers carry their own unit tests covering key reordering, numeric type equivalence, partial equivalence, and null/invalid edge cases.
+- **Per-resource `timeouts` blocks**. Every resource accepts:
+  ```hcl
+  timeouts {
+    create = "30s"
+    read   = "10s"
+    update = "30s"
+    delete = "10s"
+  }
+  ```
+  The default for any unset operation is one minute, down from Terraform's framework default of 20 minutes.
+- **Resilient HTTP client**: exponential-backoff retries on transient 5xx and network errors for idempotent verbs (GET, PUT, DELETE); configurable timeout, optional TLS skip-verify, structured `tflog` request/response tracing under `TF_LOG=TRACE` (DEBUG for retries only).
+- **Plan-time validators** on `methods` (HTTP verbs), `port` (1-65535), `status` (0/1), `type` (load-balancing algorithm), `scheme` (upstream protocol), `hash_on`, `pass_host`.
 - **`insecure` provider attribute** to opt into skipping TLS verification of the Admin API (off by default).
-- **Registry manifest** (`terraform-registry-manifest.json`) declaring plugin protocol v6.
+- **Registry manifest** (`terraform-registry-manifest.json`) declaring plugin protocol `6.0`, published as a release artifact via GoReleaser.
+- **`go test ./...` and `go vet ./...` CI steps** ahead of acceptance tests so a Go-level regression fails fast without spinning up the full APISIX cluster.
 
 ### Fixed
 
@@ -29,18 +42,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **`timeout` block no longer sends `0` for unset `connect`/`send`/`read`** fields, which previously overwrote APISIX's defaults.
 - **Plugin JSON validation at plan time** — malformed plugin JSON now produces an attribute-scoped diagnostic instead of being silently dropped from the request.
 - **Sensitive fields** (`tls.client_cert`, `tls.client_key`) marked correctly so they no longer leak into plan output.
+- **`-X main.commit` ldflag** (already configured in `.goreleaser.yaml`) now has a target symbol declared in `main.go`.
 
 ### Removed
 
 - **`apisix_ssl` resource** is not (yet) ported to the Plugin Framework rewrite. It will return in a future release. Existing SSL objects can still be managed via the APISIX Admin API directly while the resource is unavailable.
+- **Stale repo-root status documents** (`IMPLEMENTATION_STATUS.md`, `VERIFICATION_REPORT.md`, `TEST_RESULTS.md`, `GITHUB_ACTIONS_SETUP.md`, `GITHUB_ACTIONS_SUMMARY.md`) — these described the prior SDK v2 implementation and were misleading on the registry repo page.
 
-### Migration notes
+### Migrating from 0.1.x
 
 There is **no automatic state migration** from the SDK v2 implementation; the rewrite intentionally treats this as a clean break. If you have existing state from a 0.1.x release of this provider:
 
-1. Apply the new schema to your `.tf` files (add `id`, switch to attribute syntax).
-2. Run `terraform state rm` for every existing resource.
-3. Run `terraform import` for each resource using its APISIX object key (the value previously stored as `name`/`username`/`group_id`/etc.).
+1. Update your `.tf` files to the new schema:
+   - Add `id = "..."` to every resource (use the value previously stored as `name` / `username` / `group_id` / `rule_id` / `config_id`).
+   - Switch nested objects from block syntax to attribute syntax (`nodes { host = ... }` → `nodes = [{ host = ... }]`; same for `timeout`, `keepalive_pool`, `tls`, inline `upstream`).
+   - Update cross-resource references: `apisix_consumer_group.x.group_id` → `apisix_consumer_group.x.id`, `apisix_plugin_config.x.config_id` → `apisix_plugin_config.x.id`.
+2. Run `terraform state rm` for every existing resource managed by this provider.
+3. Run `terraform import` for each resource using its APISIX object key.
 4. Run `terraform plan` and confirm zero changes before applying.
 
 ## [0.1.x]

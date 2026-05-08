@@ -1,75 +1,54 @@
-# Terraform Provider for Apache APISIX
+# Terraform / OpenTofu Provider for Apache APISIX
 
 [![Unit Tests](https://github.com/scicore-unibas-ch/terraform-provider-apisix/actions/workflows/unit-tests.yml/badge.svg)](https://github.com/scicore-unibas-ch/terraform-provider-apisix/actions/workflows/unit-tests.yml)
 [![Acceptance Tests](https://github.com/scicore-unibas-ch/terraform-provider-apisix/actions/workflows/acceptance-tests.yml/badge.svg)](https://github.com/scicore-unibas-ch/terraform-provider-apisix/actions/workflows/acceptance-tests.yml)
 [![Release](https://github.com/scicore-unibas-ch/terraform-provider-apisix/actions/workflows/release.yml/badge.svg)](https://github.com/scicore-unibas-ch/terraform-provider-apisix/actions/workflows/release.yml)
 
-A Terraform/OpenTofu provider for managing [Apache APISIX](https://apisix.apache.org/) API Gateway configurations.
+Manage [Apache APISIX](https://apisix.apache.org/) API Gateway resources from Terraform or OpenTofu via the APISIX Admin API.
 
-## Features
+The provider is built on the [Terraform Plugin Framework](https://developer.hashicorp.com/terraform/plugin/framework) (plugin protocol v6) and is verified against APISIX 3.13, 3.14, 3.15, and 3.16 in CI on every change.
 
-### Resources
+## Resources
 
-This provider supports the following APISIX resources:
+| Resource | Description |
+| --- | --- |
+| [`apisix_upstream`](docs/resources/upstream.md) | Backend definition: nodes (or service-discovery), load balancing, timeouts, keepalive, mTLS, health checks. |
+| [`apisix_route`](docs/resources/route.md) | Request matching rule that maps incoming requests to a backend. |
+| [`apisix_service`](docs/resources/service.md) | Reusable bundle of host/plugin/upstream config that routes can reference. |
+| [`apisix_consumer`](docs/resources/consumer.md) | Authenticated API client identity (key-auth, jwt-auth, hmac-auth, basic-auth). |
+| [`apisix_consumer_group`](docs/resources/consumer_group.md) | Group of consumers sharing plugin configuration. |
+| [`apisix_plugin_config`](docs/resources/plugin_config.md) | Reusable bundle of plugins for routes. |
+| [`apisix_global_rule`](docs/resources/global_rule.md) | Plugins applied to every request through APISIX. |
 
-- **`apisix_upstream`** - Manage upstream servers and load balancing configurations
-  - Round-robin, least connections, consistent hashing
-  - Health checks and passive health monitoring
-  - Active health checks with custom parameters
-  - TLS configuration for upstream connections
+`apisix_ssl` is not yet implemented in this version; it will return in a future release.
 
-- **`apisix_route`** - Configure API routes and traffic routing rules
-  - URI, host, method, and IP-based matching
-  - Custom variables and filtering
-  - Plugin configurations per route
-  - WebSocket support
-  - Custom Lua scripts
+## Highlights
 
-- **`apisix_service`** - Define reusable service configurations
-  - Plugin chains for services
-  - Host-based routing
-  - WebSocket support
-  - Custom Lua scripts
-
-- **`apisix_consumer`** - Manage API consumers and authentication
-  - Key authentication (key-auth)
-  - JWT authentication (jwt-auth)
-  - HMAC authentication (hmac-auth)
-  - Basic authentication (basic-auth)
-  - Consumer groups support
-
-- **`apisix_consumer_group`** - Group consumers with shared policies
-  - Reusable plugin configurations
-  - Rate limiting per group
-  - Access control policies
-
-- **`apisix_plugin_config`** - Create reusable plugin configurations
-  - DRY plugin management
-  - Reference from multiple routes
-  - Centralized plugin updates
-
-- **`apisix_global_rule`** - Apply global plugins to all requests
-  - System-wide rate limiting
-  - Global CORS policies
-  - IP restrictions
-  - Logging and tracing
+- **Plugin Framework + plugin protocol v6** — the modern HashiCorp / OpenTofu provider stack.
+- **Sparse `PUT` semantics** — removing a field from `.tf` removes it on the server. No silent merge / no leftover labels or plugins.
+- **Drift-free JSON** — JSON-equivalence plan modifiers absorb APISIX's server-side normalization (key reordering, default injection) on plugin maps and JSON-string fields (`vars`, `health_check`).
+- **Inline upstream parity** — `apisix_route.upstream` and `apisix_service.upstream` blocks expose the full upstream surface (scheme, timeouts, retries, hashing, keepalive, mTLS, service discovery, health checks), not just `type` and `nodes`.
+- **Per-attribute validators** — HTTP methods, port ranges, status, type, scheme, hash_on, pass_host validated at plan time.
+- **Per-resource Timeouts** — every resource accepts a `timeouts { create / read / update / delete }` block; default is 1 minute (vs Terraform's 20-minute framework default).
+- **Resilient HTTP client** — exponential-backoff retries on transient 5xx and network errors for idempotent verbs; configurable timeout, optional TLS skip-verify, structured `tflog` request/response tracing under `TF_LOG=TRACE`.
+- **Typed errors** — `client.ErrNotFound` sentinel for 404 detection (no string-matching).
 
 ## Requirements
 
-- **Terraform/OpenTofu**: >= 1.0
-- **Go**: >= 1.21 (for building from source)
-- **Apache APISIX**: >= 3.0
+- Terraform ≥ 1.0 or OpenTofu ≥ 1.6
+- Apache APISIX ≥ 3.13
+- Go ≥ 1.22 (only when building from source)
 
 ## Installation
 
-### From OpenTofu Registry (Recommended)
+### From the OpenTofu Registry
 
 ```hcl
 terraform {
   required_providers {
     apisix = {
       source  = "scicore-unibas-ch/apisix"
-      version = ">= 0.1.0"
+      version = "~> 0.2"
     }
   }
 }
@@ -80,7 +59,9 @@ provider "apisix" {
 }
 ```
 
-### From Source
+The provider also reads `APISIX_BASE_URL` and `APISIX_ADMIN_KEY` from the environment if you prefer not to put them in HCL.
+
+### From source
 
 ```bash
 git clone https://github.com/scicore-unibas-ch/terraform-provider-apisix.git
@@ -88,36 +69,28 @@ cd terraform-provider-apisix
 make build
 ```
 
-## Example Usage
-
-### Basic Upstream and Route
+## Quick start
 
 ```hcl
-provider "apisix" {
-  base_url  = "http://localhost:9180/apisix/admin"
-  admin_key = "test123456789"
-}
-
 resource "apisix_upstream" "backend" {
-  name = "backend-service"
+  id   = "backend-service"
   type = "roundrobin"
 
-  nodes {
-    host   = "10.0.1.10"
-    port   = 8080
-    weight = 100
-  }
+  nodes = [
+    { host = "10.0.1.10", port = 8080, weight = 100 },
+    { host = "10.0.1.11", port = 8080, weight = 50 },
+  ]
 
-  nodes {
-    host   = "10.0.1.11"
-    port   = 8080
-    weight = 50
+  timeout = {
+    connect = 5
+    send    = 10
+    read    = 30
   }
 }
 
 resource "apisix_route" "api" {
-  name = "api-route"
-  uri  = "/api/*"
+  id  = "api-route"
+  uri = "/api/*"
 
   upstream_id = apisix_upstream.backend.id
 
@@ -126,16 +99,24 @@ resource "apisix_route" "api" {
       count         = 1000
       time_window   = 60
       rejected_code = 429
+      key           = "remote_addr"
     })
+  }
+
+  timeouts {
+    create = "30s"
+    read   = "10s"
+    update = "30s"
+    delete = "10s"
   }
 }
 ```
 
-### Consumer with Authentication
+### Consumer authentication
 
 ```hcl
 resource "apisix_consumer" "api_user" {
-  username = "api-user-1"
+  id = "api-user-1"
 
   plugins = {
     "key-auth" = jsonencode({
@@ -145,8 +126,8 @@ resource "apisix_consumer" "api_user" {
 }
 
 resource "apisix_route" "protected" {
-  name = "protected-route"
-  uri  = "/protected/*"
+  id  = "protected-route"
+  uri = "/protected/*"
 
   upstream_id = apisix_upstream.backend.id
 
@@ -156,11 +137,11 @@ resource "apisix_route" "protected" {
 }
 ```
 
-### Global Rate Limiting
+### Global rate limiting
 
 ```hcl
-resource "apisix_global_rule" "global_rate_limit" {
-  rule_id = "global-rate-limit"
+resource "apisix_global_rule" "rate_limit" {
+  id = "global-rate-limit"
 
   plugins = {
     "limit-count" = jsonencode({
@@ -173,65 +154,46 @@ resource "apisix_global_rule" "global_rate_limit" {
 }
 ```
 
-## Documentation
+## Migrating from 0.1.x
 
-Full documentation is available in the [`docs/`](docs/) directory:
+The provider was rewritten on the Plugin Framework in 0.2.0 with two breaking changes that affect every resource. See [CHANGELOG.md](CHANGELOG.md#unreleased) for the full list and a manual migration guide.
 
-- [Upstream Resource](docs/resources/upstream.md)
-- [Route Resource](docs/resources/route.md)
-- [Service Resource](docs/resources/service.md)
-- [Consumer Resource](docs/resources/consumer.md)
-- [Consumer Group Resource](docs/resources/consumer_group.md)
-- [Plugin Config Resource](docs/resources/plugin_config.md)
-- [Global Rule Resource](docs/resources/global_rule.md)
+In short:
+
+1. Add `id = "..."` to every resource (it is now the explicit URL key, replacing `name`/`username`/`group_id`/`rule_id`/`config_id`).
+2. Switch nested objects from block syntax to attribute syntax: `nodes = [{...}]`, `timeout = {...}`, `upstream = {...}`, `keepalive_pool = {...}`, `tls = {...}`.
+
+## Debugging
+
+Set `TF_LOG=TRACE` (or `=DEBUG` for fewer details) to see structured request/response logs from the Admin-API client. TRACE includes the full request and response body — those bodies may contain TLS material or plugin secrets, so redirect TRACE output to a secure location in shared environments.
 
 ## Development
 
-### Building
-
 ```bash
-make build
+make build                                    # build the provider binary
+make test                                     # go test ./...
+make test-env-up                              # start the APISIX docker-compose cluster
+make test-acceptance                          # run every acceptance test
+make test-acceptance-single TEST=upstream     # run a single acceptance test
+make test-env-down                            # stop the cluster
 ```
 
-### Running Tests
-
-```bash
-# Unit tests
-make test
-
-# Acceptance tests (requires Docker Compose)
-make test-env-up        # Start APISIX cluster
-make test-acceptance    # Run all acceptance tests
-make test-env-down      # Stop cluster
-
-# Run specific acceptance test
-make test-acceptance-single TEST=upstream
-make test-acceptance-single TEST=route
-make test-acceptance-single TEST=service
-```
-
-### Test Coverage
-
-The provider has comprehensive test coverage:
-
-- **Unit Tests**: 77 tests covering all resources
-- **Acceptance Tests**: 44 tests with real APISIX instances
-- **Total**: 121 tests with 100% pass rate
+CI runs unit tests on every push and PR (`unit-tests.yml`) and full acceptance tests against four APISIX versions on `main` / PRs targeting `main` (`acceptance-tests.yml`).
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+Pull requests welcome. Please:
+
+1. Open an issue first for non-trivial changes.
+2. Run `go vet ./...`, `go test ./...`, and `make test-acceptance` locally before submitting.
+3. Match the conventional-commit style used in the existing history (`feat:`, `fix:`, `chore:`, `docs:`, `test:`, `refactor:`, `ci:`, `release:`).
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT — see [LICENSE](LICENSE).
 
 ## Acknowledgments
 
-- [Apache APISIX](https://apisix.apache.org/) - The amazing API gateway
-- [OpenTofu](https://opentofu.org/) - Open source infrastructure as code
-- [Terraform](https://www.terraform.io/) - Original infrastructure as code tool
+- [Apache APISIX](https://apisix.apache.org/) — the API gateway this provider drives.
+- [OpenTofu](https://opentofu.org/) and [Terraform](https://www.terraform.io/) — the IaC tools.
+- [Terraform Plugin Framework](https://github.com/hashicorp/terraform-plugin-framework) — the provider SDK.
