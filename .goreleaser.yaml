@@ -69,3 +69,9 @@ release:
   draft: true
   mode: append
   replace_existing_draft: true
+  # Publish the registry manifest as a separate release artifact.
+  # Both the Terraform Registry and the OpenTofu Registry read this to
+  # discover the provider protocol version (6.0 for Plugin Framework).
+  extra_files:
+    - glob: "terraform-registry-manifest.json"
+      name_template: "{{ .ProjectName }}_{{ .Version }}_manifest.json"
