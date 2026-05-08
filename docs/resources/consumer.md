@@ -1,230 +1,87 @@
+---
+page_title: "apisix_consumer Resource - terraform-provider-apisix"
+subcategory: ""
+description: |-
+  Manages an APISIX Consumer (an authenticated API client identity).
+---
+
 # apisix_consumer
 
-Manages an APISIX Consumer resource. Consumers are used for authentication and authorization, allowing you to manage API users with various authentication plugins.
+Manages an APISIX [Consumer](https://apisix.apache.org/docs/apisix/terminology/consumer/). The Terraform `id` attribute is the consumer username (the URL key used by the APISIX Admin API).
 
 ## Example Usage
 
-### Basic Consumer
-
 ```hcl
-resource "apisix_consumer" "basic" {
-  username = "basic-user"
-  desc     = "Basic consumer without authentication"
-}
-```
-
-### Consumer with Key Auth
-
-```hcl
-resource "apisix_consumer" "key_auth" {
-  username = "key-auth-user"
-  desc     = "Consumer with key-auth plugin"
+resource "apisix_consumer" "alice" {
+  id   = "alice"
+  desc = "Alice's API client"
 
   plugins = {
     "key-auth" = jsonencode({
-      key = "my-secret-key"
+      key = "alice-secret-key"
     })
+  }
+
+  labels = {
+    env  = "production"
+    team = "platform"
   }
 }
 ```
 
-### Consumer with JWT Auth
+### Consumer attached to a Consumer Group
 
 ```hcl
-resource "apisix_consumer" "jwt_auth" {
-  username = "jwt-auth-user"
-  desc     = "Consumer with jwt-auth plugin"
+resource "apisix_consumer_group" "premium" {
+  id = "premium-tier"
+  plugins = {
+    "limit-count" = jsonencode({ count = 10000, time_window = 60, rejected_code = 429 })
+  }
+}
+
+resource "apisix_consumer" "alice" {
+  id       = "alice"
+  group_id = apisix_consumer_group.premium.id
+
+  plugins = {
+    "key-auth" = jsonencode({ key = "alice-secret-key" })
+  }
+}
+```
+
+### Consumer with multiple authentication plugins
+
+```hcl
+resource "apisix_consumer" "service_account" {
+  id = "svc-account"
 
   plugins = {
     "jwt-auth" = jsonencode({
-      key       = "jwt-key"
-      secret    = "my-secret-key-12345678"
+      key       = "svc-jwt-key"
+      secret    = "long-jwt-shared-secret"
       algorithm = "HS256"
     })
-  }
-}
-```
-
-### Consumer with HMAC Auth
-
-```hcl
-resource "apisix_consumer" "hmac_auth" {
-  username = "hmac-auth-user"
-  desc     = "Consumer with hmac-auth plugin"
-
-  plugins = {
     "hmac-auth" = jsonencode({
-      key            = "hmac-key"
-      secret         = "hmac-secret-key-12345678"
-      algorithm      = "hmac-sha512"
-      clock_skew     = 300
-      keep_headers   = "false"
-      encoded_header = "false"
+      key_id     = "svc-hmac-id"
+      secret_key = "long-hmac-shared-secret"
+      algorithm  = "hmac-sha512"
     })
-  }
-}
-```
-
-### Consumer with Basic Auth
-
-```hcl
-resource "apisix_consumer" "basic_auth" {
-  username = "basic-auth-user"
-  desc     = "Consumer with basic-auth plugin"
-
-  plugins = {
-    "basic-auth" = jsonencode({
-      username = "apiuser"
-      password = "apipassword123"
-    })
-  }
-}
-```
-
-### Consumer with Labels
-
-```hcl
-resource "apisix_consumer" "with_labels" {
-  username = "labeled-user"
-  desc     = "Consumer with labels"
-
-  labels = {
-    env        = "production"
-    team       = "platform"
-    managed-by = "terraform"
-  }
-}
-```
-
-### Complete Consumer with All Fields
-
-```hcl
-resource "apisix_consumer" "complete" {
-  username = "complete-user"
-  desc     = "Complete consumer configuration"
-
-  # Use key-auth for simple API key authentication
-  plugins = {
-    "key-auth" = jsonencode({
-      key = "complete-user-key-12345"
-    })
-  }
-
-  labels = {
-    env        = "production"
-    team       = "backend"
-    managed-by = "terraform"
   }
 }
 ```
 
 ## Argument Reference
 
-The following arguments are supported:
-
-- `username` - (Required) Username of the consumer. This is the unique identifier. Changing this forces a new resource to be created.
-- `group_id` - (Optional) Group ID of the consumer. Requires a pre-existing consumer group with matching ID.
-- `desc` - (Optional) Description of the consumer.
-- `plugins` - (Optional) Plugin configurations as a map of JSON-encoded strings. Common authentication plugins:
-  - `key-auth` - Simple API key authentication
-  - `jwt-auth` - JWT token authentication
-  - `hmac-auth` - HMAC signature authentication
-  - `basic-auth` - HTTP Basic authentication
-  - `wolf-rbac` - Wolf RBAC authentication
-  - `openid-connect` - OpenID Connect authentication
-- `labels` - (Optional) Labels as key-value pairs.
-
-## Authentication Plugin Examples
-
-### Key Auth Plugin
-
-```hcl
-plugins = {
-  "key-auth" = jsonencode({
-    key = "your-api-key"
-  })
-}
-```
-
-### JWT Auth Plugin
-
-```hcl
-plugins = {
-  "jwt-auth" = jsonencode({
-    key       = "jwt-key"
-    secret    = "your-secret-key-min-16-chars"
-    algorithm = "HS256"  # Options: HS256, HS512, RS256, RS512, ES256, ES512
-    exp       = 86400    # Optional: token expiration in seconds
-  })
-}
-```
-
-### HMAC Auth Plugin
-
-```hcl
-plugins = {
-  "hmac-auth" = jsonencode({
-    key_id         = "hmac-key-id"    # Required: unique key identifier
-    secret_key     = "your-hmac-secret"  # Required: secret key
-    algorithm      = "hmac-sha512"    # Options: hmac-sha1, hmac-sha256, hmac-sha512
-    clock_skew     = 300              # Optional: clock skew in seconds
-    keep_headers   = "false"          # Optional: keep headers in request
-    encoded_header = "false"          # Optional: use encoded header
-  })
-}
-```
-
-### Basic Auth Plugin
-
-```hcl
-plugins = {
-  "basic-auth" = jsonencode({
-    username = "apiuser"
-    password = "secure-password"
-  })
-}
-```
-
-## Attribute Reference
-
-In addition to all arguments above, the following attributes are exported:
-
-- `username` - The username of the consumer.
-- `id` - The ID of the consumer (same as username).
+- `id` — (Required, ForceNew) Consumer username. Used as the APISIX object key. Changing this forces replacement.
+- `group_id` — (Optional) ID of an `apisix_consumer_group` this consumer belongs to.
+- `desc` — (Optional) Description.
+- `plugins` — (Optional) Map of plugin name to JSON-encoded configuration. Common values include `key-auth`, `jwt-auth`, `basic-auth`, `hmac-auth`. JSON-equivalent values are suppressed by the provider.
+- `labels` — (Optional) Map of string key/value pairs.
 
 ## Import
 
-APISIX Consumers can be imported using the username, e.g.,
+Consumers are imported by their username (`id`):
 
 ```bash
-tofu import apisix_consumer.example <username>
-```
-
-Example:
-
-```bash
-tofu import apisix_consumer.example test-user-1
-```
-
-## Usage with Routes
-
-Consumers are typically used with routes that have authentication plugins enabled:
-
-```hcl
-resource "apisix_route" "protected" {
-  name = "protected-route"
-  uri  = "/api/*"
-
-  upstream_id = apisix_upstream.backend.id
-
-  plugins = {
-    "key-auth" = jsonencode({})
-  }
-}
-```
-
-Clients must then include the API key in their requests:
-
-```bash
-curl -H "apikey: your-api-key" http://apisix:9080/api/endpoint
+terraform import apisix_consumer.alice alice
 ```

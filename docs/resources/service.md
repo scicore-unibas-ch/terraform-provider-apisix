@@ -1,39 +1,33 @@
+---
+page_title: "apisix_service Resource - terraform-provider-apisix"
+subcategory: ""
+description: |-
+  Manages an APISIX Service — a reusable bundle of host/plugin/upstream configuration that routes can reference.
+---
+
 # apisix_service
 
-Manages an APISIX Service resource.
+Manages an APISIX [Service](https://apisix.apache.org/docs/apisix/terminology/service/). Services let multiple routes share the same upstream, hosts, and plugin configuration. A route attaches to a service via `service_id`.
 
 ## Example Usage
 
-### Basic Service
+### Service referencing an upstream by id
 
 ```hcl
-resource "apisix_service" "basic" {
-  name = "basic-service"
-  desc = "Basic service for testing"
-
-  upstream_id = apisix_upstream.backend.id
+resource "apisix_upstream" "users" {
+  id = "users-upstream"
+  nodes = [
+    { host = "users-1.internal", port = 8080, weight = 100 },
+    { host = "users-2.internal", port = 8080, weight = 100 },
+  ]
 }
-```
 
-### Service with Host Matching
+resource "apisix_service" "users_api" {
+  id    = "users-api"
+  name  = "Users API"
+  hosts = ["api.example.com"]
 
-```hcl
-resource "apisix_service" "with_hosts" {
-  name = "service-with-hosts"
-  desc = "Service with host matching"
-
-  hosts = ["api.example.com", "api.test.com"]
-
-  upstream_id = apisix_upstream.backend.id
-}
-```
-
-### Service with Plugin Configuration
-
-```hcl
-resource "apisix_service" "with_plugins" {
-  name = "service-with-plugins"
-  desc = "Service with plugin configuration"
+  upstream_id = apisix_upstream.users.id
 
   plugins = {
     "limit-count" = jsonencode({
@@ -42,163 +36,56 @@ resource "apisix_service" "with_plugins" {
       rejected_code = 429
       key           = "remote_addr"
     })
-    "cors" = jsonencode({
-      allow_origins = "*"
-      allow_methods = "*"
-    })
   }
 
-  upstream_id = apisix_upstream.backend.id
-}
-```
-
-### Service with Inline Upstream
-
-```hcl
-resource "apisix_service" "with_upstream" {
-  name = "service-with-upstream"
-  desc = "Service with inline upstream"
-
-  upstream {
-    type = "roundrobin"
-
-    nodes {
-      host   = "127.0.0.1"
-      port   = 8080
-      weight = 100
-    }
-
-    nodes {
-      host   = "127.0.0.1"
-      port   = 8081
-      weight = 50
-    }
-  }
-}
-```
-
-### Service with Labels and Websocket
-
-```hcl
-resource "apisix_service" "with_labels" {
-  name = "service-with-labels"
-  desc = "Service with labels and websocket support"
-
-  upstream_id = apisix_upstream.backend.id
-
-  enable_websocket = true
+  enable_websocket = false
 
   labels = {
-    env        = "production"
-    team       = "platform"
-    managed-by = "terraform"
+    env  = "production"
+    team = "platform"
   }
 }
 ```
 
-### Service with Custom Lua Script
+### Service with an inline upstream
+
+The inline `upstream` block accepts the full APISIX upstream surface — see [`apisix_upstream`](upstream.md) for the complete attribute list.
 
 ```hcl
-resource "apisix_service" "with_script" {
-  name = "service-with-script"
-  desc = "Service with custom Lua script"
+resource "apisix_service" "billing_api" {
+  id   = "billing-api"
+  name = "Billing API"
 
-  # Script must be a valid Lua module string
-  # Note: Conflicts with `plugins` field
-  script = <<-EOT
-local _M = {}
-function _M.access(conf, ctx)
-    ngx.header["X-Custom-Header"] = "CustomValue"
-end
-return _M
-EOT
-
-  upstream_id = apisix_upstream.backend.id
-}
-```
-
-### Complete Service with All Fields
-
-```hcl
-resource "apisix_service" "complete" {
-  name = "complete-service"
-  desc = "Complete service configuration with all fields"
-
-  hosts = ["api.example.com"]
-
-  plugins = {
-    "limit-count" = jsonencode({
-      count         = 5000
-      time_window   = 60
-      rejected_code = 429
-      key           = "remote_addr"
-    })
-    "proxy-rewrite" = jsonencode({
-      regex_uri = ["^/api/(.*)", "/v2/$1"]
-    })
-  }
-
-  upstream {
-    type = "roundrobin"
-
-    nodes {
-      host   = "10.0.1.10"
-      port   = 8080
-      weight = 100
+  upstream = {
+    type   = "roundrobin"
+    scheme = "https"
+    nodes = [
+      { host = "billing.internal", port = 443, weight = 100 },
+    ]
+    timeout = {
+      connect = 5
+      send    = 10
+      read    = 30
     }
-
-    nodes {
-      host   = "10.0.1.11"
-      port   = 8080
-      weight = 50
-    }
-  }
-
-  enable_websocket = true
-
-  labels = {
-    env        = "production"
-    team       = "platform"
-    managed-by = "terraform"
   }
 }
 ```
 
 ## Argument Reference
 
-The following arguments are supported:
-
-- `name` - (Optional) Name of the service.
-- `desc` - (Optional) Description of the service.
-- `hosts` - (Optional) List of hosts to match.
-- `plugins` - (Optional) Plugin configurations as a map of JSON-encoded strings. Conflicts with `script`.
-- `script` - (Optional) Lua script for custom logic. Must be a valid Lua module string. Conflicts with `plugins`.
-- `upstream_id` - (Optional) ID of the upstream resource. Conflicts with `upstream`.
-- `upstream` - (Optional) Inline upstream configuration block. Conflicts with `upstream_id`.
-  - `type` - (Optional) Load balancing type. Defaults to `roundrobin`.
-  - `nodes` - (Required) List of upstream nodes.
-    - `host` - (Required) Node host.
-    - `port` - (Required) Node port.
-    - `weight` - (Optional) Node weight. Defaults to `1`.
-- `labels` - (Optional) Labels as key-value pairs.
-- `enable_websocket` - (Optional) Enable websocket support. Defaults to `false`.
-
-## Attribute Reference
-
-In addition to all arguments above, the following attributes are exported:
-
-- `id` - The ID of the service.
+- `id` — (Required, ForceNew) Unique identifier for the service. Changing this forces replacement.
+- `name` — (Optional) Human-readable name.
+- `desc` — (Optional) Description.
+- `hosts` — (Optional) Set of hostnames to match.
+- `plugins` — (Optional) Map of plugin name to JSON-encoded configuration. Mutually exclusive with `script`. JSON-equivalent values are suppressed by the provider.
+- `script` — (Optional) Lua script for custom logic. Mutually exclusive with `plugins`.
+- `upstream_id` — (Optional) Reference to an `apisix_upstream` by id. Mutually exclusive with `upstream`.
+- `upstream` — (Optional) Inline upstream definition. Mutually exclusive with `upstream_id`. Accepts the same attributes as the `apisix_upstream` resource (minus `id`).
+- `labels` — (Optional) Map of string key/value pairs.
+- `enable_websocket` — (Optional) Enable WebSocket upgrade. Defaults to `false`.
 
 ## Import
 
-APISIX Services can be imported using the service ID, e.g.,
-
 ```bash
-tofu import apisix_service.example <service-id>
-```
-
-Example:
-
-```bash
-tofu import apisix_service.example test-service-1
+terraform import apisix_service.users_api users-api
 ```

@@ -1,356 +1,175 @@
+---
+page_title: "apisix_upstream Resource - terraform-provider-apisix"
+subcategory: ""
+description: |-
+  Manages an APISIX Upstream — a backend definition (one or more nodes, or a service-discovery reference) used by routes and services.
+---
+
 # apisix_upstream
 
-Manages an APISIX Upstream resource.
+Manages an APISIX [Upstream](https://apisix.apache.org/docs/apisix/terminology/upstream/). An upstream is a named collection of backend nodes (or a service-discovery reference) along with load-balancing, timeout, keepalive, and mTLS settings. Routes and services reference an upstream by id.
 
 ## Example Usage
 
-### Basic Upstream
+### Basic upstream
 
 ```hcl
-resource "apisix_upstream" "basic" {
-  name = "basic-upstream"
-  type = "roundrobin"
+resource "apisix_upstream" "users" {
+  id   = "users-backend"
+  name = "Users service"
 
-  nodes {
-    host   = "127.0.0.1"
-    port   = 8080
-    weight = 100
-  }
+  nodes = [
+    { host = "users-1.internal", port = 8080, weight = 100 },
+    { host = "users-2.internal", port = 8080, weight = 100 },
+  ]
 }
 ```
 
-### Upstream with Multiple Nodes
+### Round-robin with timeouts and retries
 
 ```hcl
-resource "apisix_upstream" "multi_node" {
-  name = "multi-node-upstream"
-  type = "roundrobin"
-
-  nodes {
-    host   = "10.0.1.10"
-    port   = 8080
-    weight = 100
-  }
-
-  nodes {
-    host   = "10.0.1.11"
-    port   = 8080
-    weight = 50
-  }
-
-  nodes {
-    host   = "10.0.1.12"
-    port   = 8080
-    weight = 50
-  }
-}
-```
-
-### Upstream with Health Checks
-
-```hcl
-resource "apisix_upstream" "with_healthcheck" {
-  name = "upstream-with-healthcheck"
-  type = "roundrobin"
-
-  nodes {
-    host   = "127.0.0.1"
-    port   = 8080
-    weight = 100
-  }
-
-  health_check = jsonencode({
-    active = {
-      http_path = "/health"
-      interval  = 5
-      timeout   = 3
-      healthy = {
-        interval  = 3
-        successes = 2
-      }
-      unhealthy = {
-        interval      = 3
-        http_failures = 3
-      }
-    }
-  })
-}
-```
-
-### Upstream with Timeout Configuration
-
-```hcl
-resource "apisix_upstream" "with_timeout" {
-  name = "upstream-with-timeout"
-  type = "roundrobin"
-
-  nodes {
-    host   = "127.0.0.1"
-    port   = 8080
-    weight = 100
-  }
-
-  timeout {
-    connect = 5
-    send    = 10
-    read    = 15
-  }
-
+resource "apisix_upstream" "billing" {
+  id            = "billing-backend"
+  scheme        = "https"
   retries       = 3
   retry_timeout = 10
-}
-```
 
-### Upstream with Service Discovery
+  nodes = [
+    { host = "billing-1.internal", port = 443, weight = 80 },
+    { host = "billing-2.internal", port = 443, weight = 20 },
+  ]
 
-```hcl
-resource "apisix_upstream" "service_discovery" {
-  name          = "upstream-with-discovery"
-  type          = "roundrobin"
-  service_name  = "my-service"
-  discovery_type = "consul"
-
-  discovery_args = {
-    namespace_id = "production"
-    group_name   = "backend"
+  timeout = {
+    connect = 5
+    send    = 10
+    read    = 30
   }
 }
 ```
 
-### Upstream with chash Load Balancing
+### Consistent hashing on client IP
 
 ```hcl
-resource "apisix_upstream" "chash" {
-  name    = "chash-upstream"
+resource "apisix_upstream" "cache" {
+  id      = "cache-backend"
   type    = "chash"
   hash_on = "vars"
   key     = "remote_addr"
 
-  nodes {
-    host   = "127.0.0.1"
-    port   = 8080
-    weight = 100
-  }
+  nodes = [
+    { host = "cache-1.internal", port = 11211, weight = 1 },
+    { host = "cache-2.internal", port = 11211, weight = 1 },
+    { host = "cache-3.internal", port = 11211, weight = 1 },
+  ]
 }
 ```
 
-### Upstream with Keepalive Pool
+### Active health checks
 
 ```hcl
-resource "apisix_upstream" "keepalive" {
-  name = "upstream-with-keepalive"
-  type = "roundrobin"
+resource "apisix_upstream" "checked" {
+  id = "checked-backend"
 
-  nodes {
-    host   = "127.0.0.1"
-    port   = 8080
-    weight = 100
-  }
-
-  keepalive_pool {
-    size         = 320
-    idle_timeout = 60
-    requests     = 1000
-  }
-}
-```
-
-### Upstream with mTLS
-
-```hcl
-resource "apisix_upstream" "mtls" {
-  name   = "upstream-with-mtls"
-  type   = "roundrobin"
-  scheme = "https"
-
-  nodes {
-    host   = "secure.example.com"
-    port   = 443
-    weight = 100
-  }
-
-  tls {
-    client_cert = file("${path.module}/client.crt")
-    client_key  = file("${path.module}/client.key")
-    verify      = true
-  }
-}
-```
-
-### Complete Upstream with All Fields
-
-```hcl
-resource "apisix_upstream" "complete" {
-  name          = "complete-upstream"
-  desc          = "Complete upstream configuration with all fields"
-  type          = "chash"
-  scheme        = "http"
-  hash_on       = "vars"
-  key           = "remote_addr"
-  pass_host     = "pass"
-  retries       = 2
-  retry_timeout = 5
-
-  nodes {
-    host     = "10.0.1.10"
-    port     = 8080
-    weight   = 100
-    priority = 0
-    metadata = {
-      version = "v1"
-      zone    = "us-east-1"
-    }
-  }
-
-  nodes {
-    host     = "10.0.1.11"
-    port     = 8080
-    weight   = 50
-    priority = 1
-  }
-
-  timeout {
-    connect = 3
-    send    = 5
-    read    = 10
-  }
+  nodes = [
+    { host = "app-1.internal", port = 8080, weight = 100 },
+    { host = "app-2.internal", port = 8080, weight = 100 },
+  ]
 
   health_check = jsonencode({
     active = {
-      http_path     = "/health"
-      interval      = 5
-      timeout       = 3
-      concurrency   = 10
-      type          = "http"
-      healthy = {
-        interval      = 3
-        successes     = 2
-        http_statuses = [200, 302]
-      }
-      unhealthy = {
-        interval      = 3
-        http_failures = 3
-        tcp_failures  = 2
-        timeouts      = 3
-        http_statuses = [429, 500, 502, 503, 504]
-      }
-    }
-    passive = {
-      type = "http"
-      healthy = {
-        http_statuses = [200, 201, 202, 301, 302]
-        successes     = 5
-      }
-      unhealthy = {
-        http_failures = 5
-        tcp_failures  = 2
-        timeouts      = 7
-        http_statuses = [429, 500, 503]
-      }
+      http_path = "/healthz"
+      interval  = 5
+      timeout   = 3
+      type      = "http"
+      healthy   = { interval = 3, successes = 2 }
+      unhealthy = { interval = 3, http_failures = 3 }
     }
   })
+}
+```
 
-  keepalive_pool {
-    size         = 320
-    idle_timeout = 60
-    requests     = 1000
+### mTLS to the upstream
+
+```hcl
+resource "apisix_upstream" "mtls_backend" {
+  id     = "mtls-backend"
+  scheme = "https"
+
+  nodes = [
+    { host = "secure.internal", port = 8443, weight = 100 },
+  ]
+
+  tls = {
+    client_cert = file("${path.module}/client.crt")
+    client_key  = file("${path.module}/client.key")
   }
+}
+```
 
-  labels = {
-    env        = "production"
-    team       = "platform"
-    managed-by = "terraform"
+### Service discovery (e.g. Consul)
+
+```hcl
+resource "apisix_upstream" "discovered" {
+  id             = "discovered-backend"
+  service_name   = "users-service"
+  discovery_type = "consul"
+
+  discovery_args = {
+    namespace = "production"
   }
 }
 ```
 
 ## Argument Reference
 
-The following arguments are supported:
+### Top-level
 
-- `name` - (Optional) Name of the upstream.
-- `desc` - (Optional) Description of the upstream.
-- `type` - (Optional) Load balancing algorithm. Valid values: `roundrobin`, `chash`, `ewma`, `least_conn`. Defaults to `roundrobin`.
-- `scheme` - (Optional) Scheme to use when communicating with the upstream. Valid values: `grpc`, `grpcs`, `http`, `https`, `tcp`, `tls`, `udp`, `kafka`. Defaults to `http`.
+- `id` — (Required, ForceNew) Unique upstream identifier. Changing this forces replacement.
+- `name` — (Optional) Human-readable name.
+- `desc` — (Optional) Description.
+- `type` — (Optional, Default `roundrobin`) Load-balancing algorithm. One of `roundrobin`, `chash`, `ewma`, `least_conn`.
+- `nodes` — (Optional) List of backend nodes. Required when not using service discovery. See [Nodes](#nodes) below.
+- `health_check` — (Optional) JSON-encoded active/passive health-check configuration. JSON-equivalent values are suppressed.
+- `timeout` — (Optional) Connect/send/read timeout overrides (seconds). Object with optional `connect`, `send`, `read` integer fields.
+- `retries` — (Optional) Number of retry attempts.
+- `retry_timeout` — (Optional) Total retry timeout in seconds.
+- `scheme` — (Optional, Default `http`) Upstream protocol. One of `grpc`, `grpcs`, `http`, `https`, `tcp`, `tls`, `udp`, `kafka`.
+- `labels` — (Optional) Map of string key/value pairs.
+- `service_name` — (Optional) Service name for service discovery (alternative to `nodes`).
+- `discovery_type` — (Optional) Service discovery type (e.g. `consul`, `nacos`, `eureka`).
+- `discovery_args` — (Optional) Map of service-discovery arguments (e.g. `namespace_id`, `group_name`).
+- `hash_on` — (Optional, Default `vars`) Source of the hashing key for `chash`. One of `vars`, `header`, `cookie`, `consumer`, `vars_combinations`.
+- `key` — (Optional) Hashing key for `chash` (e.g. `remote_addr`, `uri`, `arg_name`).
+- `pass_host` — (Optional, Default `pass`) How to set the upstream `Host` header. One of `pass`, `node`, `rewrite`.
+- `upstream_host` — (Optional) Custom `Host` header. Required when `pass_host` is `rewrite`.
+- `keepalive_pool` — (Optional) Keepalive pool configuration. See [Keepalive Pool](#keepalive-pool) below.
+- `tls` — (Optional) TLS configuration for mTLS to the upstream. See [TLS](#tls) below.
 
 ### Nodes
 
-- `nodes` - (Required) List of upstream nodes. Each node supports:
-  - `host` - (Required) Hostname or IP of the node.
-  - `port` - (Optional) Port of the node.
-  - `weight` - (Optional) Weight of the node for load balancing. Defaults to `1`.
-  - `priority` - (Optional) Priority of the node. Nodes with lower priority are tried first. Defaults to `0`.
-  - `metadata` - (Optional) Metadata for the node as key-value pairs.
+Each entry in `nodes` is an object with:
 
-### Timeout
-
-- `timeout` - (Optional) Timeout configuration block:
-  - `connect` - (Optional) Connect timeout in seconds.
-  - `send` - (Optional) Send timeout in seconds.
-  - `read` - (Optional) Read timeout in seconds.
-
-### Health Check
-
-- `health_check` - (Optional) JSON-encoded health check configuration. Supports both active and passive health checks.
-
-### Retry Configuration
-
-- `retries` - (Optional) Number of retries for the upstream.
-- `retry_timeout` - (Optional) Timeout for retries in seconds.
-
-### Load Balancing
-
-- `hash_on` - (Optional) Hash on parameter for chash load balancing. Valid values: `vars`, `header`, `cookie`, `consumer`, `vars_combinations`. Defaults to `vars`.
-- `key` - (Optional) The key for chash load balancing (e.g., `remote_addr`, `uri`, `arg_name`).
-
-### Host Configuration
-
-- `pass_host` - (Optional) Mode of host passing. Valid values: `pass`, `node`, `rewrite`. Defaults to `pass`.
-- `upstream_host` - (Optional) Custom host for the upstream request. Required when `pass_host` is `rewrite`.
-
-### Service Discovery
-
-- `service_name` - (Optional) Service name for service discovery. Required when using service discovery.
-- `discovery_type` - (Optional) Type of service discovery.
-- `discovery_args` - (Optional) Arguments for service discovery:
-  - `namespace_id` - (Optional) Namespace ID.
-  - `group_name` - (Optional) Group name.
+- `host` — (Required) Node hostname or IP.
+- `port` — (Required) Node port (1-65535).
+- `weight` — (Optional, Default `1`) Load-balancing weight.
+- `priority` — (Optional, Default `0`) Lower priority is tried first.
+- `metadata` — (Optional) Map of per-node metadata key/value pairs.
 
 ### Keepalive Pool
 
-- `keepalive_pool` - (Optional) Keepalive pool configuration block:
-  - `size` - (Optional) Size of the keepalive pool. Defaults to `320`.
-  - `idle_timeout` - (Optional) Idle timeout for keepalive connections in seconds. Defaults to `60`.
-  - `requests` - (Optional) Maximum number of requests per connection. Defaults to `1000`.
+- `size` — (Optional, Default `320`) Pool size.
+- `idle_timeout` — (Optional, Default `60`) Idle timeout in seconds.
+- `requests` — (Optional, Default `1000`) Max requests per connection.
 
-### TLS/mTLS
+### TLS
 
-- `tls` - (Optional) TLS client certificate configuration block:
-  - `client_cert` - (Optional, Sensitive) Client certificate content for mTLS.
-  - `client_key` - (Optional, Sensitive) Client private key content for mTLS.
-  - `client_cert_id` - (Optional) Reference to SSL object for client certificate.
-  - `verify` - (Optional) Enable server certificate verification. Defaults to `false`.
-
-### Labels
-
-- `labels` - (Optional) Labels for the upstream as key-value pairs.
-
-## Attribute Reference
-
-In addition to all arguments above, the following attributes are exported:
-
-- `id` - The ID of the upstream.
+- `client_cert` — (Optional, Sensitive) Client certificate (PEM).
+- `client_key` — (Optional, Sensitive) Client private key (PEM).
+- `client_cert_id` — (Optional) Reference to an SSL object (alternative to inline cert/key).
+- `verify` — (Optional, Default `false`) Verify the server certificate. Currently only effective for `kafka` upstreams.
 
 ## Import
 
-APISIX Upstreams can be imported using the upstream ID, e.g.,
-
 ```bash
-tofu import apisix_upstream.example <upstream-id>
-```
-
-Example:
-
-```bash
-tofu import apisix_upstream.example test-upstream-1
+terraform import apisix_upstream.users users-backend
 ```
