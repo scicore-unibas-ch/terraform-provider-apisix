@@ -18,6 +18,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 // ErrNotFound indicates the resource does not exist (HTTP 404).
@@ -122,8 +124,16 @@ func (c *Client) do(ctx context.Context, method, url string, body any) (*Respons
 	backoff := 200 * time.Millisecond
 	var lastErr error
 
+	// Log fields shared across the request/response pair. Note: at TRACE
+	// level the request and response bodies are logged in full; bodies may
+	// contain sensitive material (TLS keys, plugin secrets). Operators who
+	// enable TF_LOG=TRACE in shared environments should redirect logs to a
+	// secure location.
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		if attempt > 0 {
+			tflog.Debug(ctx, "apisix: retrying request", map[string]any{
+				"method": method, "url": url, "attempt": attempt,
+			})
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
@@ -143,9 +153,23 @@ func (c *Client) do(ctx context.Context, method, url string, body any) (*Respons
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-API-KEY", c.cfg.AdminKey)
 
+		tflog.Trace(ctx, "apisix: request", map[string]any{
+			"method":    method,
+			"url":       url,
+			"body_size": len(bodyBytes),
+			"body":      string(bodyBytes),
+		})
+
+		start := time.Now()
 		resp, err := c.http.Do(req)
 		if err != nil {
 			lastErr = err
+			tflog.Debug(ctx, "apisix: transport error", map[string]any{
+				"method":  method,
+				"url":     url,
+				"error":   err.Error(),
+				"elapsed": time.Since(start).String(),
+			})
 			if isIdempotent(method) {
 				continue
 			}
@@ -153,6 +177,15 @@ func (c *Client) do(ctx context.Context, method, url string, body any) (*Respons
 		}
 		data, _ := io.ReadAll(resp.Body)
 		_ = resp.Body.Close()
+
+		tflog.Trace(ctx, "apisix: response", map[string]any{
+			"method":    method,
+			"url":       url,
+			"status":    resp.StatusCode,
+			"elapsed":   time.Since(start).String(),
+			"body_size": len(data),
+			"body":      string(data),
+		})
 
 		if resp.StatusCode == http.StatusNotFound {
 			return nil, ErrNotFound
