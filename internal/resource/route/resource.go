@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
@@ -42,6 +43,7 @@ import (
 	"github.com/scicore-unibas-ch/terraform-provider-apisix/internal/inlineupstream"
 	"github.com/scicore-unibas-ch/terraform-provider-apisix/internal/planmodifier/jsonmap"
 	"github.com/scicore-unibas-ch/terraform-provider-apisix/internal/planmodifier/jsonstring"
+	"github.com/scicore-unibas-ch/terraform-provider-apisix/internal/timeoutshelper"
 )
 
 const apiKind = "routes"
@@ -88,8 +90,9 @@ type model struct {
 	PluginConfigID  types.String `tfsdk:"plugin_config_id"`
 	Labels          types.Map    `tfsdk:"labels"`
 	Timeout         types.Object `tfsdk:"timeout"`
-	EnableWebsocket types.Bool   `tfsdk:"enable_websocket"`
-	Status          types.Int64  `tfsdk:"status"`
+	EnableWebsocket types.Bool     `tfsdk:"enable_websocket"`
+	Status          types.Int64    `tfsdk:"status"`
+	Timeouts        timeouts.Value `tfsdk:"timeouts"`
 }
 
 var timeoutAttrTypes = map[string]attr.Type{
@@ -127,10 +130,11 @@ func (r *Resource) ConfigValidators(_ context.Context) []resource.ConfigValidato
 	}
 }
 
-func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *Resource) Schema(ctx context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "Manages an APISIX Route. The id attribute is the route's APISIX object key.",
 		Attributes: map[string]schema.Attribute{
+			"timeouts": timeouts.Attributes(ctx, timeouts.Opts{Create: true, Read: true, Update: true, Delete: true}),
 			"id": schema.StringAttribute{
 				Required:    true,
 				Description: "Unique route identifier. Used as the APISIX object key. Changing this forces replacement.",
@@ -473,6 +477,12 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		return
 	}
 
+	ctx, cancel := timeoutshelper.Apply(ctx, plan.Timeouts, "create", timeoutshelper.Default, &resp.Diagnostics)
+	defer cancel()
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	body, diags := r.buildBody(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -489,6 +499,12 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state model
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	ctx, cancel := timeoutshelper.Apply(ctx, state.Timeouts, "read", timeoutshelper.Default, &resp.Diagnostics)
+	defer cancel()
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -517,6 +533,12 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 		return
 	}
 
+	ctx, cancel := timeoutshelper.Apply(ctx, plan.Timeouts, "update", timeoutshelper.Default, &resp.Diagnostics)
+	defer cancel()
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	body, diags := r.buildBody(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -533,6 +555,12 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state model
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	ctx, cancel := timeoutshelper.Apply(ctx, state.Timeouts, "delete", timeoutshelper.Default, &resp.Diagnostics)
+	defer cancel()
 	if resp.Diagnostics.HasError() {
 		return
 	}
