@@ -15,12 +15,19 @@ schema:
 
 apisix_ssl is not implemented in the provider yet, so SSL objects are listed
 in the summary but not emitted as Terraform resources.
+
+The HCL is emitted in a straightforward shape that is correct but not
+canonically aligned. Run `tofu fmt -recursive <output-dir>` (or
+`terraform fmt -recursive`) on the output before committing — this script
+will auto-run it when a `tofu` or `terraform` binary is found on PATH.
 """
 
 import argparse
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
 from datetime import datetime
 from urllib.error import HTTPError, URLError
@@ -571,6 +578,25 @@ class ResourceGenerator:
         print("  ✅ Generated README.md")
 
 
+def run_fmt_if_available(output_dir):
+    """Run `tofu fmt` (or `terraform fmt`) over the output if available."""
+    binary = shutil.which("tofu") or shutil.which("terraform")
+    if not binary:
+        print("\nℹ Skipping HCL formatting: neither `tofu` nor `terraform` found on PATH.")
+        print(f"  Recommended: run `tofu fmt -recursive {output_dir}` to canonicalize alignment.")
+        return
+    print(f"\n🧹 Running `{os.path.basename(binary)} fmt -recursive` on {output_dir}")
+    try:
+        subprocess.run(
+            [binary, "fmt", "-recursive", output_dir],
+            check=True,
+            stdout=subprocess.DEVNULL,
+        )
+        print("  ✅ Formatted")
+    except subprocess.CalledProcessError as e:
+        print(f"  ⚠ fmt exited with status {e.returncode}; output was generated but is not formatted")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Import APISIX resources to Terraform/OpenTofu")
     parser.add_argument("--base-url",         default="http://localhost:9180/apisix/admin")
@@ -597,6 +623,7 @@ def main():
     generator.generate_separate_files(args.output_dir)
     generator.generate_import_script(os.path.join(args.output_dir, "import.sh"))
     generator.generate_readme(os.path.join(args.output_dir, "README.md"))
+    run_fmt_if_available(args.output_dir)
 
     print(f"\n✅ Complete! Output: {os.path.abspath(args.output_dir)}")
 
