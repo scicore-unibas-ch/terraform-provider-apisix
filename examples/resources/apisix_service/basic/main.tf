@@ -2,26 +2,27 @@ terraform {
   required_providers {
     apisix = {
       source  = "scicore-unibas-ch/apisix"
-      version = "0.1.0"
+      version = "~> 0.2"
     }
   }
 }
 
 provider "apisix" {
-  api_key = "test123456789"
+  base_url  = "http://localhost:9180/apisix/admin"
+  admin_key = "test123456789"
 }
 
 resource "apisix_upstream" "backend" {
-  name = "backend-upstream"
+  id   = "basic-service-backend"
+  type = "roundrobin"
 
-  nodes {
-    host   = "127.0.0.1"
-    port   = 8080
-    weight = 100
-  }
+  nodes = [
+    { host = "127.0.0.1", port = 8080, weight = 100 },
+  ]
 }
 
 resource "apisix_service" "basic" {
+  id   = "basic-service"
   name = "basic-service"
   desc = "Basic service for testing"
 

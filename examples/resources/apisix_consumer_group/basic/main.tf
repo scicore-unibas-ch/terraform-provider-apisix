@@ -2,7 +2,7 @@ terraform {
   required_providers {
     apisix = {
       source  = "scicore-unibas-ch/apisix"
-      version = "0.1.0"
+      version = "~> 0.2"
     }
   }
 }
@@ -13,8 +13,8 @@ provider "apisix" {
 }
 
 resource "apisix_consumer_group" "basic" {
-  group_id = "basic-group"
-  desc     = "Basic consumer group"
+  id   = "basic-group"
+  desc = "Basic consumer group"
 
   plugins = {
     "limit-count" = jsonencode({

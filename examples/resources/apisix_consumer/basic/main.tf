@@ -2,7 +2,7 @@ terraform {
   required_providers {
     apisix = {
       source  = "scicore-unibas-ch/apisix"
-      version = "0.1.0"
+      version = "~> 0.2"
     }
   }
 }
@@ -13,6 +13,12 @@ provider "apisix" {
 }
 
 resource "apisix_consumer" "basic" {
-  username = "basic-user"
-  desc     = "Basic consumer for API access"
+  id   = "basic-user"
+  desc = "Basic consumer for API access"
+
+  plugins = {
+    "key-auth" = jsonencode({
+      key = "basic-user-key"
+    })
+  }
 }

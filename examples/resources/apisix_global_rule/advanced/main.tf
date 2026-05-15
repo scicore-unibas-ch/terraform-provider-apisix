@@ -2,7 +2,7 @@ terraform {
   required_providers {
     apisix = {
       source  = "scicore-unibas-ch/apisix"
-      version = "0.1.0"
+      version = "~> 0.2"
     }
   }
 }
@@ -12,9 +12,9 @@ provider "apisix" {
   admin_key = "test123456789"
 }
 
-# Global rule with multiple plugins
+# Global rule combining rate limiting and CORS for every request
 resource "apisix_global_rule" "multi_plugin" {
-  rule_id = "global-security"
+  id = "global-security"
 
   plugins = {
     "limit-count" = jsonencode({
@@ -33,7 +33,7 @@ resource "apisix_global_rule" "multi_plugin" {
 
 # Global IP restriction
 resource "apisix_global_rule" "ip_restriction" {
-  rule_id = "global-ip-restriction"
+  id = "global-ip-restriction"
 
   plugins = {
     "ip-restriction" = jsonencode({

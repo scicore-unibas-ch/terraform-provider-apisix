@@ -2,7 +2,7 @@ terraform {
   required_providers {
     apisix = {
       source  = "scicore-unibas-ch/apisix"
-      version = "0.1.0"
+      version = "~> 0.2"
     }
   }
 }
@@ -14,8 +14,8 @@ provider "apisix" {
 
 # Consumer with JWT authentication
 resource "apisix_consumer" "jwt_user" {
-  username = "jwt-user"
-  desc     = "User with JWT authentication"
+  id   = "jwt-user"
+  desc = "User with JWT authentication"
 
   plugins = {
     "jwt-auth" = jsonencode({
@@ -34,8 +34,8 @@ resource "apisix_consumer" "jwt_user" {
 
 # Consumer with API key authentication
 resource "apisix_consumer" "api_key_user" {
-  username = "api-key-user"
-  desc     = "User with API key authentication"
+  id   = "api-key-user"
+  desc = "User with API key authentication"
 
   plugins = {
     "key-auth" = jsonencode({
@@ -52,8 +52,8 @@ resource "apisix_consumer" "api_key_user" {
 
 # Consumer with HMAC authentication
 resource "apisix_consumer" "hmac_user" {
-  username = "hmac-user"
-  desc     = "User with HMAC authentication"
+  id   = "hmac-user"
+  desc = "User with HMAC authentication"
 
   plugins = {
     "hmac-auth" = jsonencode({
@@ -61,8 +61,8 @@ resource "apisix_consumer" "hmac_user" {
       secret_key     = "hmac-secret-key-12345678"
       algorithm      = "hmac-sha512"
       clock_skew     = 300
-      keep_headers   = "false"
-      encoded_header = "false"
+      keep_headers   = false
+      encoded_header = false
     })
   }
 
@@ -73,11 +73,11 @@ resource "apisix_consumer" "hmac_user" {
   }
 }
 
-# Consumer in a consumer group
+# Consumer group referenced by the grouped consumer below
 resource "apisix_consumer_group" "example_group" {
-  group_id = "example-consumer-group"
-  name     = "Example Consumer Group"
-  desc     = "Consumer group for example users"
+  id   = "example-consumer-group"
+  name = "Example Consumer Group"
+  desc = "Consumer group for example users"
 
   plugins = {
     "limit-count" = jsonencode({
@@ -93,10 +93,12 @@ resource "apisix_consumer_group" "example_group" {
   }
 }
 
+# Consumer that inherits the group's plugins (note: `group_id` is the FK
+# to the group's `id`; the consumer's own URL key is still `id`).
 resource "apisix_consumer" "grouped_user" {
-  username = "grouped-user"
+  id       = "grouped-user"
   desc     = "User in a consumer group"
-  group_id = apisix_consumer_group.example_group.group_id
+  group_id = apisix_consumer_group.example_group.id
 
   plugins = {
     "key-auth" = jsonencode({

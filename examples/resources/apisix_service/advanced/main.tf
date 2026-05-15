@@ -2,35 +2,31 @@ terraform {
   required_providers {
     apisix = {
       source  = "scicore-unibas-ch/apisix"
-      version = "0.1.0"
+      version = "~> 0.2"
     }
   }
 }
 
 provider "apisix" {
-  api_key = "test123456789"
+  base_url  = "http://localhost:9180/apisix/admin"
+  admin_key = "test123456789"
 }
 
 resource "apisix_upstream" "backend" {
-  name = "backend-upstream"
+  id   = "advanced-service-backend"
+  type = "roundrobin"
 
-  nodes {
-    host   = "10.0.1.10"
-    port   = 8080
-    weight = 100
-  }
-
-  nodes {
-    host   = "10.0.1.11"
-    port   = 8080
-    weight = 50
-  }
+  nodes = [
+    { host = "10.0.1.10", port = 8080, weight = 100 },
+    { host = "10.0.1.11", port = 8080, weight = 50 },
+  ]
 }
 
+# Service with inline upstream (attribute syntax), hosts, plugins, labels
 resource "apisix_service" "advanced" {
-  name = "advanced-service"
-  desc = "Advanced service with all features"
-
+  id    = "advanced-service"
+  name  = "advanced-service"
+  desc  = "Advanced service with all features"
   hosts = ["api.example.com", "api.test.com"]
 
   plugins = {
@@ -46,20 +42,12 @@ resource "apisix_service" "advanced" {
     })
   }
 
-  upstream {
+  upstream = {
     type = "roundrobin"
-
-    nodes {
-      host   = "10.0.1.10"
-      port   = 8080
-      weight = 100
-    }
-
-    nodes {
-      host   = "10.0.1.11"
-      port   = 8080
-      weight = 50
-    }
+    nodes = [
+      { host = "10.0.1.10", port = 8080, weight = 100 },
+      { host = "10.0.1.11", port = 8080, weight = 50 },
+    ]
   }
 
   enable_websocket = true
@@ -71,21 +59,20 @@ resource "apisix_service" "advanced" {
   }
 }
 
-# Service with custom Lua script (alternative to plugins)
+# Service with custom Lua script (mutually exclusive with `plugins`)
 resource "apisix_service" "with_script" {
+  id   = "advanced-service-with-script"
   name = "service-with-script"
   desc = "Service with custom Lua script instead of plugins"
 
-  # Script must be a valid Lua module string
-  # Note: Conflicts with `plugins` field - use one or the other
   script = <<-EOT
-local _M = {}
-function _M.access(conf, ctx)
-    ngx.header["X-Custom-Header"] = "CustomValue"
-    ngx.header["X-Request-ID"] = ngx.request_id()
-end
-return _M
-EOT
+    local _M = {}
+    function _M.access(conf, ctx)
+        ngx.header["X-Custom-Header"] = "CustomValue"
+        ngx.header["X-Request-ID"] = ngx.request_id()
+    end
+    return _M
+  EOT
 
   upstream_id = apisix_upstream.backend.id
 

@@ -1,68 +1,46 @@
-# Advanced Route Example
-
-This example demonstrates a complete route configuration with all supported fields.
-
-```hcl
 terraform {
   required_providers {
     apisix = {
-      source = "scicore-unibas-ch/apisix"
+      source  = "scicore-unibas-ch/apisix"
+      version = "~> 0.2"
     }
   }
 }
 
 provider "apisix" {
-  base_url  = var.apisix_base_url
-  admin_key = var.apisix_admin_key
+  base_url  = "http://localhost:9180/apisix/admin"
+  admin_key = "test123456789"
   timeout   = 30
 }
 
-variable "apisix_base_url" {
-  type    = string
-  default = "http://localhost:9180/apisix/admin"
-}
-
-variable "apisix_admin_key" {
-  type      = string
-  default   = "test123456789"
-  sensitive = true
-}
-
 resource "apisix_upstream" "backend" {
-  name = "backend-upstream"
+  id   = "advanced-route-backend"
   type = "roundrobin"
 
-  nodes {
-    host   = "10.0.1.10"
-    port   = 8080
-    weight = 100
-  }
-
-  nodes {
-    host   = "10.0.1.11"
-    port   = 8080
-    weight = 50
-  }
+  nodes = [
+    { host = "10.0.1.10", port = 8080, weight = 100 },
+    { host = "10.0.1.11", port = 8080, weight = 50 },
+  ]
 }
 
 # Route with multiple match conditions
 resource "apisix_route" "multi_match" {
-  name  = "advanced-route"
-  desc  = "Advanced route with multiple matching conditions"
-  uris  = ["/api/*", "/v1/*", "/v2/*"]
-  hosts = ["api.example.com", "api.test.com"]
-  methods = ["GET", "POST", "PUT", "DELETE"]
+  id       = "advanced-route-multi-match"
+  name     = "advanced-route"
+  desc     = "Advanced route with multiple matching conditions"
+  uris     = ["/api/*", "/v1/*", "/v2/*"]
+  hosts    = ["api.example.com", "api.test.com"]
+  methods  = ["GET", "POST", "PUT", "DELETE"]
   priority = 100
 
   upstream_id = apisix_upstream.backend.id
-
-  status = 1
+  status      = 1
 }
 
 # Route with plugin configuration
 resource "apisix_route" "with_plugins" {
-  name = "route-with-plugins"
-  uri  = "/protected/*"
+  id  = "advanced-route-with-plugins"
+  uri = "/protected/*"
 
   upstream_id = apisix_upstream.backend.id
 
@@ -77,7 +55,7 @@ resource "apisix_route" "with_plugins" {
       allow_origins  = "*"
       allow_methods  = "*"
       allow_headers  = "*"
-      expose_headers = ["Content-Type"]
+      expose_headers = "Content-Type"
       max_age        = 3600
     })
     "proxy-rewrite" = jsonencode({
@@ -86,12 +64,12 @@ resource "apisix_route" "with_plugins" {
   }
 }
 
-# Route with vars filtering
+# Route with vars filtering. JSON-equivalent plan modifiers absorb
+# APISIX's server-side normalization of this field.
 resource "apisix_route" "with_vars" {
-  name = "admin-route"
-  uri  = "/admin/*"
+  id  = "advanced-route-with-vars"
+  uri = "/admin/*"
 
-  # Advanced filtering with vars
   vars = jsonencode([
     ["http_method", "==", "GET"],
     ["remote_addr", "in", ["127.0.0.1", "10.0.0.1", "192.168.0.0/16"]],
@@ -102,28 +80,21 @@ resource "apisix_route" "with_vars" {
   priority    = 1000
 }
 
-# Route with inline upstream
+# Route with inline upstream (attribute syntax)
 resource "apisix_route" "inline_upstream" {
-  name = "route-with-inline-upstream"
-  uri  = "/service/*"
+  id  = "advanced-route-inline-upstream"
+  uri = "/service/*"
 
-  upstream {
+  upstream = {
     type = "roundrobin"
-    
-    nodes {
-      host   = "127.0.0.1"
-      port   = 9000
-      weight = 100
-    }
-    
-    nodes {
-      host   = "127.0.0.1"
-      port   = 9001
-      weight = 50
-    }
+
+    nodes = [
+      { host = "127.0.0.1", port = 9000, weight = 100 },
+      { host = "127.0.0.1", port = 9001, weight = 50 },
+    ]
   }
 
-  timeout {
+  timeout = {
     connect = 5
     send    = 10
     read    = 30
@@ -132,23 +103,22 @@ resource "apisix_route" "inline_upstream" {
   enable_websocket = true
 }
 
-# Complete route with all fields
+# Complete route with most fields
 resource "apisix_route" "complete" {
-  name          = "complete-route"
-  desc          = "Complete route configuration with all fields"
-  uris          = ["/api/v3/*"]
-  hosts         = ["api.example.com"]
-  methods       = ["GET", "POST"]
-  priority      = 500
-  status        = 1
+  id       = "advanced-route-complete"
+  name     = "complete-route"
+  desc     = "Complete route configuration with all fields"
+  uris     = ["/api/v3/*"]
+  hosts    = ["api.example.com"]
+  methods  = ["GET", "POST"]
+  priority = 500
+  status   = 1
 
-  # Vars filtering
   vars = jsonencode([
     ["http_content_type", "==", "application/json"],
     ["http_authorization", "!=", ""]
   ])
 
-  # Plugin configuration
   plugins = {
     "limit-count" = jsonencode({
       count         = 5000
@@ -160,7 +130,7 @@ resource "apisix_route" "complete" {
 
   upstream_id = apisix_upstream.backend.id
 
-  timeout {
+  timeout = {
     connect = 10
     send    = 30
     read    = 60
@@ -176,25 +146,22 @@ resource "apisix_route" "complete" {
   }
 }
 
-# Route with custom Lua script (alternative to plugins)
+# Route with custom Lua script (mutually exclusive with `plugins`)
 resource "apisix_route" "with_script" {
-  name = "route-with-script"
+  id   = "advanced-route-with-script"
   desc = "Route with custom Lua script instead of plugins"
   uri  = "/custom/*"
 
-  # Script must be a valid Lua module string
-  # Note: Conflicts with `plugins` field - use one or the other
   script = <<-EOT
-local _M = {}
-function _M.access(conf, ctx)
-    ngx.header["X-Custom-Header"] = "CustomValue"
-    ngx.header["X-Request-ID"] = ngx.request_id()
-end
-return _M
-EOT
+    local _M = {}
+    function _M.access(conf, ctx)
+        ngx.header["X-Custom-Header"] = "CustomValue"
+        ngx.header["X-Request-ID"] = ngx.request_id()
+    end
+    return _M
+  EOT
 
   upstream_id = apisix_upstream.backend.id
-  status      = 1
 
   labels = {
     env        = "production"
@@ -203,13 +170,13 @@ EOT
   }
 }
 
-# Outputs
 output "route_ids" {
   value = {
-    multi_match    = apisix_route.multi_match.id
-    with_plugins   = apisix_route.with_plugins.id
-    with_vars      = apisix_route.with_vars.id
+    multi_match     = apisix_route.multi_match.id
+    with_plugins    = apisix_route.with_plugins.id
+    with_vars       = apisix_route.with_vars.id
     inline_upstream = apisix_route.inline_upstream.id
-    complete       = apisix_route.complete.id
+    complete        = apisix_route.complete.id
+    with_script     = apisix_route.with_script.id
   }
 }

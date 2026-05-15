@@ -2,7 +2,7 @@ terraform {
   required_providers {
     apisix = {
       source  = "scicore-unibas-ch/apisix"
-      version = "0.1.0"
+      version = "~> 0.2"
     }
   }
 }
@@ -12,10 +12,10 @@ provider "apisix" {
   admin_key = "test123456789"
 }
 
-# Plugin config with multiple plugins
+# Plugin config combining rate limiting and CORS
 resource "apisix_plugin_config" "api_protection" {
-  config_id = "api-protection"
-  desc      = "API protection with rate limiting and CORS"
+  id   = "api-protection"
+  desc = "API protection with rate limiting and CORS"
 
   plugins = {
     "limit-count" = jsonencode({
@@ -38,20 +38,20 @@ resource "apisix_plugin_config" "api_protection" {
   }
 }
 
-# Route using the plugin config
+# Backing upstream for the protected route
 resource "apisix_upstream" "backend" {
-  name = "backend-upstream"
+  id   = "api-protection-backend"
+  type = "roundrobin"
 
-  nodes {
-    host   = "127.0.0.1"
-    port   = 8080
-    weight = 100
-  }
+  nodes = [
+    { host = "127.0.0.1", port = 8080, weight = 100 },
+  ]
 }
 
+# Route that attaches the plugin config by id
 resource "apisix_route" "protected_route" {
-  name             = "protected-route"
+  id               = "api-protection-route"
   uri              = "/api/*"
-  plugin_config_id = apisix_plugin_config.api_protection.config_id
+  plugin_config_id = apisix_plugin_config.api_protection.id
   upstream_id      = apisix_upstream.backend.id
 }

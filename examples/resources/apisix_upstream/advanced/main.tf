@@ -1,35 +1,21 @@
-# Advanced Upstream Example
-
-This example demonstrates a complete upstream configuration with all supported fields.
-
-```hcl
 terraform {
   required_providers {
     apisix = {
-      source = "scicore-unibas-ch/apisix"
+      source  = "scicore-unibas-ch/apisix"
+      version = "~> 0.2"
     }
   }
 }
 
 provider "apisix" {
-  base_url  = var.apisix_base_url
-  admin_key = var.apisix_admin_key
+  base_url  = "http://localhost:9180/apisix/admin"
+  admin_key = "test123456789"
   timeout   = 30
 }
 
-variable "apisix_base_url" {
-  type    = string
-  default = "http://localhost:9180/apisix/admin"
-}
-
-variable "apisix_admin_key" {
-  type      = string
-  default   = "test123456789"
-  sensitive = true
-}
-
-# Complete upstream with all fields
+# Complete upstream with most fields
 resource "apisix_upstream" "advanced" {
+  id            = "advanced-upstream"
   name          = "advanced-upstream"
   desc          = "Advanced upstream with all configuration options"
   type          = "chash"
@@ -40,40 +26,40 @@ resource "apisix_upstream" "advanced" {
   retries       = 2
   retry_timeout = 5
 
-  # Multiple nodes with different weights and priorities
-  nodes {
-    host     = "10.0.1.10"
-    port     = 8080
-    weight   = 100
-    priority = 0
-    metadata = {
-      version = "v1"
-      zone    = "us-east-1"
-    }
-  }
+  nodes = [
+    {
+      host     = "10.0.1.10"
+      port     = 8080
+      weight   = 100
+      priority = 0
+      metadata = {
+        version = "v1"
+        zone    = "us-east-1"
+      }
+    },
+    {
+      host     = "10.0.1.11"
+      port     = 8080
+      weight   = 50
+      priority = 1
+    },
+  ]
 
-  nodes {
-    host     = "10.0.1.11"
-    port     = 8080
-    weight   = 50
-    priority = 1
-  }
-
-  # Timeout configuration
-  timeout {
+  timeout = {
     connect = 3
     send    = 5
     read    = 10
   }
 
-  # Active and passive health checks
+  # JSON-encoded active + passive health checks. The provider's
+  # jsonstring plan modifier suppresses APISIX's server-side
+  # normalization, so re-applies stay stable.
   health_check = jsonencode({
     active = {
-      http_path     = "/health"
-      interval      = 5
-      timeout       = 3
-      concurrency   = 10
-      type          = "http"
+      http_path   = "/health"
+      timeout     = 3
+      concurrency = 10
+      type        = "http"
       healthy = {
         interval      = 3
         successes     = 2
@@ -102,14 +88,12 @@ resource "apisix_upstream" "advanced" {
     }
   })
 
-  # Keepalive pool configuration
-  keepalive_pool {
+  keepalive_pool = {
     size         = 320
     idle_timeout = 60
     requests     = 1000
   }
 
-  # Labels for organization
   labels = {
     env        = "production"
     team       = "platform"
@@ -117,8 +101,9 @@ resource "apisix_upstream" "advanced" {
   }
 }
 
-# Upstream with service discovery
+# Upstream backed by Consul service discovery
 resource "apisix_upstream" "consul" {
+  id             = "consul-upstream"
   name           = "consul-upstream"
   type           = "roundrobin"
   service_name   = "api-service"
@@ -130,26 +115,24 @@ resource "apisix_upstream" "consul" {
   }
 }
 
-# Upstream with mTLS
+# Upstream with mTLS to the backend
 resource "apisix_upstream" "mtls" {
+  id     = "mtls-upstream"
   name   = "mtls-upstream"
   type   = "roundrobin"
   scheme = "https"
 
-  nodes {
-    host   = "secure.example.com"
-    port   = 443
-    weight = 100
-  }
+  nodes = [
+    { host = "secure.example.com", port = 443, weight = 100 },
+  ]
 
-  tls {
+  tls = {
     client_cert = file("${path.module}/certs/client.crt")
     client_key  = file("${path.module}/certs/client.key")
     verify      = true
   }
 }
 
-# Output the upstream IDs
 output "advanced_upstream_id" {
   value = apisix_upstream.advanced.id
 }

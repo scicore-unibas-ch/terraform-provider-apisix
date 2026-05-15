@@ -2,7 +2,7 @@ terraform {
   required_providers {
     apisix = {
       source  = "scicore-unibas-ch/apisix"
-      version = "0.1.0"
+      version = "~> 0.2"
     }
   }
 }
@@ -14,8 +14,8 @@ provider "apisix" {
 
 # Consumer group with rate limiting
 resource "apisix_consumer_group" "rate_limited" {
-  group_id = "rate-limited-group"
-  desc     = "Consumer group with rate limiting"
+  id   = "rate-limited-group"
+  desc = "Consumer group with rate limiting"
 
   plugins = {
     "limit-count" = jsonencode({
@@ -33,11 +33,11 @@ resource "apisix_consumer_group" "rate_limited" {
   }
 }
 
-# Consumer in the group
+# Consumer in the group (group_id references the group's id)
 resource "apisix_consumer" "premium_user" {
-  username = "premium-user"
+  id       = "premium-user"
   desc     = "Premium user in rate-limited group"
-  group_id = apisix_consumer_group.rate_limited.group_id
+  group_id = apisix_consumer_group.rate_limited.id
 
   plugins = {
     "key-auth" = jsonencode({

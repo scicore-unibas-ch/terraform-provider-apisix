@@ -2,7 +2,7 @@ terraform {
   required_providers {
     apisix = {
       source  = "scicore-unibas-ch/apisix"
-      version = "0.1.0"
+      version = "~> 0.2"
     }
   }
 }
@@ -12,10 +12,9 @@ provider "apisix" {
   admin_key = "test123456789"
 }
 
-# Basic global rule
-# Note: This resource is fully implemented but acceptance tests are not executed.
+# Global rate limit applied to every request through APISIX
 resource "apisix_global_rule" "basic" {
-  rule_id = "global-rate-limit"
+  id = "global-rate-limit"
 
   plugins = {
     "limit-count" = jsonencode({

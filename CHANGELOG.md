@@ -28,6 +28,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - `apisix_route.priority`, `apisix_route.enable_websocket`, `apisix_route.status`
   - `apisix_service.enable_websocket`
   - `apisix_upstream.type`, `apisix_upstream.scheme`, `apisix_upstream.hash_on`, `apisix_upstream.pass_host`
+- **All registry examples rewritten for the Plugin Framework schema.** Every `examples/resources/apisix_<name>/(basic|advanced)/main.tf` was carrying SDK v2 syntax that would not parse against v0.2.x. Corrections applied across all 14 files:
+  - Replaced legacy URL-key attributes (`username`, `group_id`, `rule_id`, `config_id`, `name`-as-key) with the required `id = "..."` attribute on every resource.
+  - Converted nested-object block syntax (`nodes { ... }`, `timeout { ... }`, inline `upstream { ... }`, `keepalive_pool { ... }`, `tls { ... }`) to attribute syntax (`nodes = [{ ... }]`, `timeout = { ... }`, etc.).
+  - Fixed cross-resource references: `apisix_consumer_group.x.group_id` → `.id`, `apisix_plugin_config.x.config_id` → `.id`.
+  - Fixed `apisix_service` examples that used a non-existent `api_key` provider attribute instead of `admin_key`.
+  - Repaired `apisix_route` and `apisix_upstream` `basic`/`advanced` example files that started with markdown prose (broken HCL) and now contain valid standalone Terraform.
+  - Bumped the version constraint in every example from `version = "0.1.0"` to `version = "~> 0.2"`.
 
 ## [0.2.0] - 2026-05-08
 

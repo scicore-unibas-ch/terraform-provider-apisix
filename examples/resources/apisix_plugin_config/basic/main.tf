@@ -2,7 +2,7 @@ terraform {
   required_providers {
     apisix = {
       source  = "scicore-unibas-ch/apisix"
-      version = "0.1.0"
+      version = "~> 0.2"
     }
   }
 }
@@ -12,11 +12,10 @@ provider "apisix" {
   admin_key = "test123456789"
 }
 
-# Basic plugin config
-# Note: This resource is fully implemented but acceptance tests are not executed.
+# Reusable plugin bundle that routes can attach via plugin_config_id
 resource "apisix_plugin_config" "basic" {
-  config_id = "basic-rate-limit"
-  desc      = "Basic rate limiting configuration"
+  id   = "basic-rate-limit"
+  desc = "Basic rate limiting configuration"
 
   plugins = {
     "limit-count" = jsonencode({
