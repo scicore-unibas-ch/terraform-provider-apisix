@@ -51,8 +51,18 @@ jobs:
       - name: go vet
         run: go vet ./...
 
-      - name: go test
+      - name: go test (unit)
         run: go test ./...
+
+      # Go acceptance tests (TF_ACC=1) — drives the provider through
+      # Terraform's plan/apply/import lifecycle against the live APISIX
+      # started above. State-stability and import round-trip checks live here.
+      - name: go test (acceptance)
+        env:
+          TF_ACC: "1"
+          APISIX_BASE_URL: "http://localhost:9180/apisix/admin"
+          APISIX_ADMIN_KEY: "test123456789"
+        run: go test ./... -run '^TestAcc' -v -timeout 30m
 
       # Build provider
       - name: Build provider binary
