@@ -107,7 +107,7 @@ resource "apisix_route" "billing" {
 - `host` / `hosts` — (Optional, mutually exclusive) Hostname or hostnames to match.
 - `remote_addr` / `remote_addrs` — (Optional, mutually exclusive) Client IP or CIDR(s) to match.
 - `methods` — (Optional) Set of HTTP methods. Valid values: `GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `HEAD`, `OPTIONS`, `TRACE`, `CONNECT`, `PURGE`.
-- `priority` — (Optional, Default `0`) Higher value matches first.
+- `priority` — (Optional, Computed, Default `0`) Higher value matches first. Always populated in state after apply.
 - `vars` — (Optional) JSON-encoded list of variable conditions for advanced routing. JSON-equivalent values are suppressed.
 - `filter_func` — (Optional) Lua function source for custom filtering.
 - `plugins` — (Optional) Map of plugin name to JSON-encoded configuration. Mutually exclusive with `script`. JSON-equivalent values are suppressed.
@@ -118,8 +118,8 @@ resource "apisix_route" "billing" {
 - `plugin_config_id` — (Optional) Reference to an `apisix_plugin_config` by id.
 - `labels` — (Optional) Map of string key/value pairs.
 - `timeout` — (Optional) Per-route upstream timeout overrides (seconds). Object with optional `connect`, `send`, `read` integer fields.
-- `enable_websocket` — (Optional, Default `false`) Enable WebSocket upgrade.
-- `status` — (Optional, Default `1`) `1` = enabled, `0` = disabled.
+- `enable_websocket` — (Optional, Computed, Default `false`) Enable WebSocket upgrade. Always populated in state after apply.
+- `status` — (Optional, Computed, Default `1`) `1` = enabled, `0` = disabled. Always populated in state after apply.
 
 ## Import
 

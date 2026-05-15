@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Go acceptance test framework wired up.** Layered the Plugin Framework `resource.Test` harness on top of the existing docker-compose stack. The first test, `TestAccConsumerGroup_stateStability`, exercises three guarantees that the bash scripts cannot easily verify on the reference resource:
+  - Create succeeds and the resource lands in state.
+  - A re-plan against the same config produces an empty plan (state-stability — confirms that `Read` + the `jsonmap` plan modifier fully reconcile APISIX's server-side normalization).
+  - Import by ID reconstructs the same state (`ImportStateVerify`).
+
+  The test auto-skips unless `TF_ACC=1` is set, so `go test ./...` remains a fast unit-only run. `APISIX_BASE_URL` and `APISIX_ADMIN_KEY` configure the provider; the same env vars used by every other test path.
+- **CI now runs `TF_ACC=1` Go acceptance tests** alongside the bash acceptance scripts in `acceptance-tests.yml`, against APISIX 3.14, 3.15, and 3.16.
+
+### Changed
+
+- **Minimum recommended APISIX version raised to 3.14.** APISIX 3.13.0 was dropped from the CI matrix (it remained on the 3.13.x branch but the project's reference target moved forward). Older versions may still work but are no longer verified.
+- **Dependency bump:** `github.com/hashicorp/terraform-plugin-framework` `v1.16.1` → `v1.19.0` (required by the new `terraform-plugin-go v0.31.0` transitive dependency pulled in by `terraform-plugin-testing`).
+- **Added `terraform-plugin-testing v1.16.0`** as a direct dependency for the new acceptance test framework.
+
+### Fixed
+
+- **Documentation clarifications** for attributes that are `Optional + Computed + Default` (so they appear in state after apply even when not set in HCL):
+  - `apisix_route.priority`, `apisix_route.enable_websocket`, `apisix_route.status`
+  - `apisix_service.enable_websocket`
+  - `apisix_upstream.type`, `apisix_upstream.scheme`, `apisix_upstream.hash_on`, `apisix_upstream.pass_host`
+
+## [0.2.0] - 2026-05-08
+
 This is the **0.2.0** rewrite. The provider has been rebuilt on the [Terraform Plugin Framework](https://developer.hashicorp.com/terraform/plugin/framework) (plugin protocol v6). It is a breaking change relative to 0.1.x; see the [Migration](#migrating-from-01x) section below.
 
 ### Changed (breaking)

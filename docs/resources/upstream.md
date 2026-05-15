@@ -127,20 +127,20 @@ resource "apisix_upstream" "discovered" {
 - `id` — (Required, ForceNew) Unique upstream identifier. Changing this forces replacement.
 - `name` — (Optional) Human-readable name.
 - `desc` — (Optional) Description.
-- `type` — (Optional, Default `roundrobin`) Load-balancing algorithm. One of `roundrobin`, `chash`, `ewma`, `least_conn`.
+- `type` — (Optional, Computed, Default `roundrobin`) Load-balancing algorithm. One of `roundrobin`, `chash`, `ewma`, `least_conn`. Always populated in state after apply.
 - `nodes` — (Optional) List of backend nodes. Required when not using service discovery. See [Nodes](#nodes) below.
 - `health_check` — (Optional) JSON-encoded active/passive health-check configuration. JSON-equivalent values are suppressed.
 - `timeout` — (Optional) Connect/send/read timeout overrides (seconds). Object with optional `connect`, `send`, `read` integer fields.
 - `retries` — (Optional) Number of retry attempts.
 - `retry_timeout` — (Optional) Total retry timeout in seconds.
-- `scheme` — (Optional, Default `http`) Upstream protocol. One of `grpc`, `grpcs`, `http`, `https`, `tcp`, `tls`, `udp`, `kafka`.
+- `scheme` — (Optional, Computed, Default `http`) Upstream protocol. One of `grpc`, `grpcs`, `http`, `https`, `tcp`, `tls`, `udp`, `kafka`. Always populated in state after apply.
 - `labels` — (Optional) Map of string key/value pairs.
 - `service_name` — (Optional) Service name for service discovery (alternative to `nodes`).
 - `discovery_type` — (Optional) Service discovery type (e.g. `consul`, `nacos`, `eureka`).
 - `discovery_args` — (Optional) Map of service-discovery arguments (e.g. `namespace_id`, `group_name`).
-- `hash_on` — (Optional, Default `vars`) Source of the hashing key for `chash`. One of `vars`, `header`, `cookie`, `consumer`, `vars_combinations`.
+- `hash_on` — (Optional, Computed, Default `vars`) Source of the hashing key for `chash`. One of `vars`, `header`, `cookie`, `consumer`, `vars_combinations`. Always populated in state after apply.
 - `key` — (Optional) Hashing key for `chash` (e.g. `remote_addr`, `uri`, `arg_name`).
-- `pass_host` — (Optional, Default `pass`) How to set the upstream `Host` header. One of `pass`, `node`, `rewrite`.
+- `pass_host` — (Optional, Computed, Default `pass`) How to set the upstream `Host` header. One of `pass`, `node`, `rewrite`. Always populated in state after apply.
 - `upstream_host` — (Optional) Custom `Host` header. Required when `pass_host` is `rewrite`.
 - `keepalive_pool` — (Optional) Keepalive pool configuration. See [Keepalive Pool](#keepalive-pool) below.
 - `tls` — (Optional) TLS configuration for mTLS to the upstream. See [TLS](#tls) below.

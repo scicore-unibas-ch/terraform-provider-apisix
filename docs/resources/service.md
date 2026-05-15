@@ -82,7 +82,7 @@ resource "apisix_service" "billing_api" {
 - `upstream_id` — (Optional) Reference to an `apisix_upstream` by id. Mutually exclusive with `upstream`.
 - `upstream` — (Optional) Inline upstream definition. Mutually exclusive with `upstream_id`. Accepts the same attributes as the `apisix_upstream` resource (minus `id`).
 - `labels` — (Optional) Map of string key/value pairs.
-- `enable_websocket` — (Optional) Enable WebSocket upgrade. Defaults to `false`.
+- `enable_websocket` — (Optional, Computed, Default `false`) Enable WebSocket upgrade. Always populated in state after apply.
 
 ## Import
 

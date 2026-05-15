@@ -69,5 +69,5 @@ export APISIX_ADMIN_KEY="your-admin-key"
 
 ## Requirements
 
-- Apache APISIX 3.13.0 or later
+- Apache APISIX 3.14.0 or later
 - Terraform >= 1.0 or OpenTofu >= 1.6

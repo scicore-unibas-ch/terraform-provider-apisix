@@ -6,7 +6,7 @@
 
 Manage [Apache APISIX](https://apisix.apache.org/) API Gateway resources from Terraform or OpenTofu via the APISIX Admin API.
 
-The provider is built on the [Terraform Plugin Framework](https://developer.hashicorp.com/terraform/plugin/framework) (plugin protocol v6) and is verified against APISIX 3.13, 3.14, 3.15, and 3.16 in CI on every change.
+The provider is built on the [Terraform Plugin Framework](https://developer.hashicorp.com/terraform/plugin/framework) (plugin protocol v6) and is verified against APISIX 3.14, 3.15, and 3.16 in CI on every change.
 
 ## Resources
 
@@ -36,7 +36,7 @@ The provider is built on the [Terraform Plugin Framework](https://developer.hash
 ## Requirements
 
 - Terraform ≥ 1.0 or OpenTofu ≥ 1.6
-- Apache APISIX ≥ 3.13
+- Apache APISIX ≥ 3.14
 - Go ≥ 1.22 (only when building from source)
 
 ## Installation
@@ -178,7 +178,7 @@ make test-acceptance-single TEST=upstream     # run a single acceptance test
 make test-env-down                            # stop the cluster
 ```
 
-CI runs unit tests on every push and PR (`unit-tests.yml`) and full acceptance tests against four APISIX versions on `main` / PRs targeting `main` (`acceptance-tests.yml`).
+CI runs unit tests on every push and PR (`unit-tests.yml`) and full acceptance tests against three APISIX versions (3.14, 3.15, 3.16) on `main` / PRs targeting `main` (`acceptance-tests.yml`). The acceptance workflow exercises both the legacy bash scripts under `tests/acceptance/` and Go acceptance tests (`TF_ACC=1`) that drive the provider through Terraform's own plan/apply lifecycle.
 
 ## Contributing
 
