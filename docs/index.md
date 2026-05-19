@@ -18,7 +18,7 @@ terraform {
   required_providers {
     apisix = {
       source  = "scicore-unibas-ch/apisix"
-      version = "~> 0.2"
+      version = "~> 0.3"
     }
   }
 }

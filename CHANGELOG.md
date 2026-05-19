@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-19
+
 ### Added
 
 - **New `apisix_plugin_metadata` resource.** Manages APISIX [Plugin Metadata](https://apisix.apache.org/docs/apisix/admin-api/#plugin-metadata) — per-plugin global configuration (log formats, exporter endpoints, default tracing parameters) applied to every instance of a given plugin. The resource follows the same pattern as `apisix_consumer_group`: `id` is the plugin name (`Required` + `RequiresReplace`), Update is `PUT` (full replace), and the JSON-encoded `metadata` body uses `jsonstring.SuppressEquivalent()` to absorb APISIX's server-side key reordering. The `Read` path strips `id` / `create_time` / `update_time` (which APISIX echoes into the response body) and recursively canonicalizes nested objects so `ImportStateVerify` round-trips cleanly. Includes Go acceptance test, bash acceptance fixtures for `syslog` / `http-logger` / `kafka-logger`, registry docs, and `examples/resources/apisix_plugin_metadata/{basic,advanced}/`.
