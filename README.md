@@ -19,6 +19,7 @@ The provider is built on the [Terraform Plugin Framework](https://developer.hash
 | [`apisix_consumer_group`](docs/resources/consumer_group.md) | Group of consumers sharing plugin configuration. |
 | [`apisix_plugin_config`](docs/resources/plugin_config.md) | Reusable bundle of plugins for routes. |
 | [`apisix_global_rule`](docs/resources/global_rule.md) | Plugins applied to every request through APISIX. |
+| [`apisix_plugin_metadata`](docs/resources/plugin_metadata.md) | Per-plugin global configuration (log formats, exporter endpoints, defaults). |
 
 `apisix_ssl` is not yet implemented in this version; it will return in a future release.
 

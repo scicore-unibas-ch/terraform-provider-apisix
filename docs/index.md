@@ -66,6 +66,7 @@ export APISIX_ADMIN_KEY="your-admin-key"
 - [apisix_consumer_group](resources/consumer_group.md) — group of consumers sharing plugin configuration.
 - [apisix_plugin_config](resources/plugin_config.md) — reusable bundle of plugins for routes.
 - [apisix_global_rule](resources/global_rule.md) — plugins applied to every request through APISIX.
+- [apisix_plugin_metadata](resources/plugin_metadata.md) — per-plugin global configuration (log formats, exporter endpoints, defaults).
 
 ## Requirements
 
