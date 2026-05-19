@@ -97,6 +97,10 @@ jobs:
         working-directory: tests/acceptance/global_rule
         run: ./test.sh
 
+      - name: Run plugin_metadata acceptance tests
+        working-directory: tests/acceptance/plugin_metadata
+        run: ./test.sh
+
       # Cleanup ONCE after all tests
       - name: Stop APISIX cluster
         if: always()

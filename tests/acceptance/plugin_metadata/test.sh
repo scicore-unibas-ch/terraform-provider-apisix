@@ -1,0 +1,41 @@
+#!/bin/bash
+set -euo pipefail
+
+TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$TEST_DIR"
+
+# Generate .tofurc
+PROVIDER_DIR="$(cd "$TEST_DIR/../../.." && pwd)"
+cat > .tofurc << TOFURC
+provider_installation {
+  dev_overrides {
+    "scicore-unibas-ch/apisix" = "$PROVIDER_DIR"
+  }
+  direct {}
+}
+TOFURC
+export TF_CLI_CONFIG_FILE="$TEST_DIR/.tofurc"
+
+echo "=== Cycle 1: Create -> Verify Idempotency -> Destroy ==="
+tofu apply -auto-approve -lock=false
+tofu plan -detailed-exitcode -lock=false
+tofu destroy -auto-approve -lock=false
+
+echo "=== Cycle 2: Create -> Import -> Verify -> Destroy ==="
+tofu apply -auto-approve -lock=false
+tofu plan -detailed-exitcode -lock=false
+
+# Import test
+for resource in syslog http_logger kafka_logger; do
+    ID=$(tofu state show apisix_plugin_metadata.$resource | grep -E '^\s*id\s*=' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
+    tofu state rm apisix_plugin_metadata.$resource
+    tofu import apisix_plugin_metadata.$resource "$ID"
+done
+
+tofu apply -auto-approve -lock=false
+tofu plan -detailed-exitcode -lock=false
+tofu destroy -auto-approve -lock=false
+
+# Cleanup
+rm -f .tofurc
+echo "All plugin_metadata tests passed"

@@ -18,6 +18,7 @@ import (
 	consumergroupres "github.com/scicore-unibas-ch/terraform-provider-apisix/internal/resource/consumergroup"
 	globalruleres "github.com/scicore-unibas-ch/terraform-provider-apisix/internal/resource/globalrule"
 	pluginconfigres "github.com/scicore-unibas-ch/terraform-provider-apisix/internal/resource/pluginconfig"
+	pluginmetadatares "github.com/scicore-unibas-ch/terraform-provider-apisix/internal/resource/pluginmetadata"
 	routeres "github.com/scicore-unibas-ch/terraform-provider-apisix/internal/resource/route"
 	serviceres "github.com/scicore-unibas-ch/terraform-provider-apisix/internal/resource/service"
 	upstreamres "github.com/scicore-unibas-ch/terraform-provider-apisix/internal/resource/upstream"
@@ -128,6 +129,7 @@ func (p *apisixProvider) Resources(_ context.Context) []func() resource.Resource
 		consumergroupres.NewResource,
 		globalruleres.NewResource,
 		pluginconfigres.NewResource,
+		pluginmetadatares.NewResource,
 		routeres.NewResource,
 		serviceres.NewResource,
 		upstreamres.NewResource,
