@@ -177,6 +177,8 @@ resource "apisix_global_rule" "rate_limit" {
 }
 ```
 
+For more complete, runnable configurations — including advanced variants of every resource — see [`examples/resources/`](examples/resources/). Each resource has `apisix_<name>/basic/` and `apisix_<name>/advanced/` fixtures that apply cleanly against the docker-compose stack.
+
 ## Importing existing resources
 
 Every resource supports `terraform import`, keyed by the APISIX Admin API `id`:
