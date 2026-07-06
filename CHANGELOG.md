@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Go acceptance tests for every resource.** `TestAcc<Name>_stateStability` now exists for all 8 resources (previously only `consumer_group` and `plugin_metadata`), each covering create → in-place update (PUT full replace) → no-op re-plan → `ImportStateVerify`. Shared harness boilerplate moved to `internal/acctest`.
+- **Unit tests for the HTTP client** (`internal/client`): httptest-backed coverage of the 5xx retry/backoff loop, retry exhaustion, no-retry on 4xx, the `ErrNotFound` sentinel, `force=true` delete, error-message fallbacks (`error_msg` → `message` → raw body), and context cancellation.
+- **Unit tests for the shared upstream codec** (`internal/inlineupstream`): decode-defaults, legacy map-form nodes, health-check canonicalization, and a full wire round-trip fixture.
+- Unit tests for `internal/timeoutshelper`, `internal/tfconv`, and `internal/pluginsmap`.
+
+### Changed
+
+- **Internal refactor — no schema or state changes.** Duplicated logic across resource packages was extracted into shared helpers:
+  - `internal/pluginsmap` — the plugins-map codec (JSON validation with attribute-scoped diagnostics on the way in, canonical re-marshal on the way out), previously copy-pasted in six resources.
+  - `internal/tfconv` — wire↔Terraform value conversions (`NullableString`, `StringPtr`, `CanonicalJSON`, …), previously re-declared per package.
+  - `apisix_upstream` now composes `internal/inlineupstream` (schema, wire structs, codec) instead of maintaining a ~450-line parallel copy; the standalone resource and the inline `upstream` blocks of `apisix_route` / `apisix_service` are now guaranteed identical. Route's `timeout` block reuses the same codec.
+  - Resource `Configure` boilerplate collapsed into `client.FromProviderData`.
+- Attribute descriptions of the inline `upstream` block in `apisix_route` / `apisix_service` now match the standalone `apisix_upstream` resource verbatim (e.g. the `nodes` / `keepalive_pool` / `tls.client_cert` notes).
+
 ## [0.3.0] - 2026-05-19
 
 ### Added

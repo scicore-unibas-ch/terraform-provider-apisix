@@ -12,7 +12,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
@@ -28,6 +27,8 @@ import (
 	"github.com/scicore-unibas-ch/terraform-provider-apisix/internal/client"
 	"github.com/scicore-unibas-ch/terraform-provider-apisix/internal/inlineupstream"
 	"github.com/scicore-unibas-ch/terraform-provider-apisix/internal/planmodifier/jsonmap"
+	"github.com/scicore-unibas-ch/terraform-provider-apisix/internal/pluginsmap"
+	"github.com/scicore-unibas-ch/terraform-provider-apisix/internal/tfconv"
 	"github.com/scicore-unibas-ch/terraform-provider-apisix/internal/timeoutshelper"
 )
 
@@ -49,14 +50,14 @@ type Resource struct {
 func NewResource() resource.Resource { return &Resource{} }
 
 type model struct {
-	ID              types.String `tfsdk:"id"`
-	Name            types.String `tfsdk:"name"`
-	Desc            types.String `tfsdk:"desc"`
-	Hosts           types.Set    `tfsdk:"hosts"`
-	Plugins         types.Map    `tfsdk:"plugins"`
-	Script          types.String `tfsdk:"script"`
-	UpstreamID      types.String `tfsdk:"upstream_id"`
-	Upstream        types.Object `tfsdk:"upstream"`
+	ID              types.String   `tfsdk:"id"`
+	Name            types.String   `tfsdk:"name"`
+	Desc            types.String   `tfsdk:"desc"`
+	Hosts           types.Set      `tfsdk:"hosts"`
+	Plugins         types.Map      `tfsdk:"plugins"`
+	Script          types.String   `tfsdk:"script"`
+	UpstreamID      types.String   `tfsdk:"upstream_id"`
+	Upstream        types.Object   `tfsdk:"upstream"`
 	Labels          types.Map      `tfsdk:"labels"`
 	EnableWebsocket types.Bool     `tfsdk:"enable_websocket"`
 	Timeouts        timeouts.Value `tfsdk:"timeouts"`
@@ -67,18 +68,7 @@ func (r *Resource) Metadata(_ context.Context, req resource.MetadataRequest, res
 }
 
 func (r *Resource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-	c, ok := req.ProviderData.(*client.Client)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected provider data",
-			fmt.Sprintf("expected *client.Client, got %T", req.ProviderData),
-		)
-		return
-	}
-	r.client = c
+	r.client = client.FromProviderData(req.ProviderData, &resp.Diagnostics)
 }
 
 func (r *Resource) ConfigValidators(_ context.Context) []resource.ConfigValidator {
@@ -173,30 +163,16 @@ type apiBody struct {
 
 func (r *Resource) buildBody(ctx context.Context, m *model) (*apiBody, diag.Diagnostics) {
 	var diags diag.Diagnostics
-	body := &apiBody{ID: m.ID.ValueString()}
-
-	if !m.Name.IsNull() && !m.Name.IsUnknown() {
-		v := m.Name.ValueString()
-		body.Name = &v
-	}
-	if !m.Desc.IsNull() && !m.Desc.IsUnknown() {
-		v := m.Desc.ValueString()
-		body.Desc = &v
-	}
-	if !m.Script.IsNull() && !m.Script.IsUnknown() {
-		v := m.Script.ValueString()
-		body.Script = &v
-	}
-	if !m.UpstreamID.IsNull() && !m.UpstreamID.IsUnknown() {
-		v := m.UpstreamID.ValueString()
-		body.UpstreamID = &v
-	}
-	// enable_websocket is Optional+Computed+Default(false), so it always has a
-	// known value after planning. Always emit so removing it from config
-	// reverts the server to false.
-	if !m.EnableWebsocket.IsNull() && !m.EnableWebsocket.IsUnknown() {
-		v := m.EnableWebsocket.ValueBool()
-		body.EnableWebsocket = &v
+	body := &apiBody{
+		ID:         m.ID.ValueString(),
+		Name:       tfconv.StringPtr(m.Name),
+		Desc:       tfconv.StringPtr(m.Desc),
+		Script:     tfconv.StringPtr(m.Script),
+		UpstreamID: tfconv.StringPtr(m.UpstreamID),
+		// enable_websocket is Optional+Computed+Default(false), so it always
+		// has a known value after planning. Always emit so removing it from
+		// config reverts the server to false.
+		EnableWebsocket: tfconv.BoolPtr(m.EnableWebsocket),
 	}
 
 	if !m.Hosts.IsNull() && !m.Hosts.IsUnknown() {
@@ -208,26 +184,12 @@ func (r *Resource) buildBody(ctx context.Context, m *model) (*apiBody, diag.Diag
 		body.Hosts = hosts
 	}
 
-	if !m.Plugins.IsNull() && !m.Plugins.IsUnknown() {
-		plugins := map[string]string{}
-		diags.Append(m.Plugins.ElementsAs(ctx, &plugins, false)...)
-		if diags.HasError() {
-			return nil, diags
-		}
-		body.Plugins = make(map[string]json.RawMessage, len(plugins))
-		for k, v := range plugins {
-			var probe any
-			if err := json.Unmarshal([]byte(v), &probe); err != nil {
-				diags.AddAttributeError(
-					path.Root("plugins").AtMapKey(k),
-					"Invalid plugin JSON",
-					fmt.Sprintf("plugin %q: %v", k, err),
-				)
-				return nil, diags
-			}
-			body.Plugins[k] = json.RawMessage(v)
-		}
+	plugins, d := pluginsmap.Build(ctx, m.Plugins, path.Root("plugins"))
+	diags.Append(d...)
+	if diags.HasError() {
+		return nil, diags
 	}
+	body.Plugins = plugins
 
 	if !m.Labels.IsNull() && !m.Labels.IsUnknown() {
 		labels := map[string]string{}
@@ -377,10 +339,10 @@ func decodeInto(ctx context.Context, raw json.RawMessage, m *model) diag.Diagnos
 	}
 
 	m.ID = types.StringValue(body.ID)
-	m.Name = nullableString(body.Name)
-	m.Desc = nullableString(body.Desc)
-	m.Script = nullableString(body.Script)
-	m.UpstreamID = nullableString(body.UpstreamID)
+	m.Name = tfconv.NullableString(body.Name)
+	m.Desc = tfconv.NullableString(body.Desc)
+	m.Script = tfconv.NullableString(body.Script)
+	m.UpstreamID = tfconv.NullableString(body.UpstreamID)
 
 	if body.EnableWebsocket != nil {
 		m.EnableWebsocket = types.BoolValue(*body.EnableWebsocket)
@@ -404,27 +366,9 @@ func decodeInto(ctx context.Context, raw json.RawMessage, m *model) diag.Diagnos
 		m.Labels = v
 	}
 
-	pluginStrs := make(map[string]string, len(body.Plugins))
-	for k, v := range body.Plugins {
-		var obj any
-		if err := json.Unmarshal(v, &obj); err != nil {
-			pluginStrs[k] = string(v)
-			continue
-		}
-		canonical, err := json.Marshal(obj)
-		if err != nil {
-			pluginStrs[k] = string(v)
-			continue
-		}
-		pluginStrs[k] = string(canonical)
-	}
-	if len(pluginStrs) == 0 {
-		m.Plugins = types.MapNull(types.StringType)
-	} else {
-		v, d := types.MapValueFrom(ctx, types.StringType, pluginStrs)
-		diags.Append(d...)
-		m.Plugins = v
-	}
+	pVal, d := pluginsmap.Decode(ctx, body.Plugins, true)
+	diags.Append(d...)
+	m.Plugins = pVal
 
 	if len(body.Upstream) == 0 || string(body.Upstream) == "null" {
 		m.Upstream = types.ObjectNull(inlineupstream.AttrTypes)
@@ -435,11 +379,4 @@ func decodeInto(ctx context.Context, raw json.RawMessage, m *model) diag.Diagnos
 	}
 
 	return diags
-}
-
-func nullableString(s string) types.String {
-	if s == "" {
-		return types.StringNull()
-	}
-	return types.StringValue(s)
 }

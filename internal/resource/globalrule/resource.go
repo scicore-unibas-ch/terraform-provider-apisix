@@ -9,7 +9,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -22,6 +21,7 @@ import (
 
 	"github.com/scicore-unibas-ch/terraform-provider-apisix/internal/client"
 	"github.com/scicore-unibas-ch/terraform-provider-apisix/internal/planmodifier/jsonmap"
+	"github.com/scicore-unibas-ch/terraform-provider-apisix/internal/pluginsmap"
 	"github.com/scicore-unibas-ch/terraform-provider-apisix/internal/timeoutshelper"
 )
 
@@ -52,18 +52,7 @@ func (r *Resource) Metadata(_ context.Context, req resource.MetadataRequest, res
 }
 
 func (r *Resource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-	c, ok := req.ProviderData.(*client.Client)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected provider data",
-			fmt.Sprintf("expected *client.Client, got %T", req.ProviderData),
-		)
-		return
-	}
-	r.client = c
+	r.client = client.FromProviderData(req.ProviderData, &resp.Diagnostics)
 }
 
 func (r *Resource) Schema(ctx context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
@@ -99,26 +88,12 @@ func (r *Resource) buildBody(ctx context.Context, m *model) (*apiBody, diag.Diag
 	var diags diag.Diagnostics
 	body := &apiBody{ID: m.ID.ValueString()}
 
-	if !m.Plugins.IsNull() && !m.Plugins.IsUnknown() {
-		plugins := map[string]string{}
-		diags.Append(m.Plugins.ElementsAs(ctx, &plugins, false)...)
-		if diags.HasError() {
-			return nil, diags
-		}
-		body.Plugins = make(map[string]json.RawMessage, len(plugins))
-		for k, v := range plugins {
-			var probe any
-			if err := json.Unmarshal([]byte(v), &probe); err != nil {
-				diags.AddAttributeError(
-					path.Root("plugins").AtMapKey(k),
-					"Invalid plugin JSON",
-					fmt.Sprintf("plugin %q: %v", k, err),
-				)
-				return nil, diags
-			}
-			body.Plugins[k] = json.RawMessage(v)
-		}
+	plugins, d := pluginsmap.Build(ctx, m.Plugins, path.Root("plugins"))
+	diags.Append(d...)
+	if diags.HasError() {
+		return nil, diags
 	}
+	body.Plugins = plugins
 
 	return body, diags
 }
@@ -246,21 +221,7 @@ func decodeInto(ctx context.Context, raw json.RawMessage, m *model) diag.Diagnos
 
 	m.ID = types.StringValue(body.ID)
 
-	pluginStrs := make(map[string]string, len(body.Plugins))
-	for k, v := range body.Plugins {
-		var obj any
-		if err := json.Unmarshal(v, &obj); err != nil {
-			pluginStrs[k] = string(v)
-			continue
-		}
-		canonical, err := json.Marshal(obj)
-		if err != nil {
-			pluginStrs[k] = string(v)
-			continue
-		}
-		pluginStrs[k] = string(canonical)
-	}
-	pVal, d := types.MapValueFrom(ctx, types.StringType, pluginStrs)
+	pVal, d := pluginsmap.Decode(ctx, body.Plugins, false)
 	diags.Append(d...)
 	m.Plugins = pVal
 

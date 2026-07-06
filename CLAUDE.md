@@ -10,10 +10,14 @@ The provider was rewritten from SDK v2 to the Plugin Framework in v0.2.0 — cle
 
 ## Repository layout
 
-- `internal/client/` — hardened HTTP client (PUT for Update, `ErrNotFound` sentinel, idempotent retries with backoff, optional TLS skip-verify).
+- `internal/client/` — hardened HTTP client (PUT for Update, `ErrNotFound` sentinel, idempotent retries with backoff, optional TLS skip-verify). Also exports `FromProviderData` — the shared resource `Configure` helper.
 - `internal/provider/` — provider entrypoint and resource registration.
 - `internal/planmodifier/jsonmap/` — Map plan modifier for plugin maps (e.g. `consumer_group.plugins`).
 - `internal/planmodifier/jsonstring/` — String plan modifier for single JSON-string fields (e.g. `route.vars`, `plugin_metadata.metadata`). **Do not create a new String JSON modifier — this one already exists.**
+- `internal/inlineupstream/` — the single source of truth for the APISIX upstream object: schema attrs, wire structs, and codec. Used by the inline `upstream` blocks of route/service **and** by the standalone `apisix_upstream` resource (whose model embeds `inlineupstream.Fields`). Change upstream attributes here only.
+- `internal/pluginsmap/` — shared codec for `plugins` map attributes (`Build` validates each value as JSON with attribute-scoped diagnostics; `Decode` canonicalizes). **Do not hand-roll plugin map conversion in a resource.**
+- `internal/tfconv/` — wire↔Terraform value conversions (`NullableString`, `StringPtr`, `CanonicalJSON`, …). Reach for these before writing a local helper.
+- `internal/acctest/` — shared Go acceptance-test harness (provider factories + `PreCheck`).
 - `internal/resource/<name>/` — one package per resource. `consumergroup` is the reference for the standard shape; `pluginmetadata` is the reference for resources whose body is a single JSON blob.
 - `internal/timeoutshelper/` — `timeouts {}` block glue.
 - `tests/acceptance/<name>/{main.tf,test.sh}` — bash acceptance harness, run by `make test-acceptance`.

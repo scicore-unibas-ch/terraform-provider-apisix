@@ -1,28 +1,12 @@
 package pluginmetadata_test
 
 import (
-	"os"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-framework/providerserver"
-	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 
-	"github.com/scicore-unibas-ch/terraform-provider-apisix/internal/provider"
+	"github.com/scicore-unibas-ch/terraform-provider-apisix/internal/acctest"
 )
-
-var protoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
-	"apisix": providerserver.NewProtocol6WithError(provider.New("test")()),
-}
-
-func testAccPreCheck(t *testing.T) {
-	t.Helper()
-	for _, k := range []string{"APISIX_BASE_URL", "APISIX_ADMIN_KEY"} {
-		if os.Getenv(k) == "" {
-			t.Fatalf("%s must be set for TF_ACC tests", k)
-		}
-	}
-}
 
 const testAccPluginMetadataSyslog = `
 resource "apisix_plugin_metadata" "syslog" {
@@ -54,8 +38,8 @@ resource "apisix_plugin_metadata" "syslog" {
 
 func TestAccPluginMetadata_stateStability(t *testing.T) {
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: protoV6ProviderFactories,
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccPluginMetadataSyslog,

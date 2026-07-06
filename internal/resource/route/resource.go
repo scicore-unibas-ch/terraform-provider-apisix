@@ -18,14 +18,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
-	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -37,12 +35,13 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 
 	"github.com/scicore-unibas-ch/terraform-provider-apisix/internal/client"
 	"github.com/scicore-unibas-ch/terraform-provider-apisix/internal/inlineupstream"
 	"github.com/scicore-unibas-ch/terraform-provider-apisix/internal/planmodifier/jsonmap"
 	"github.com/scicore-unibas-ch/terraform-provider-apisix/internal/planmodifier/jsonstring"
+	"github.com/scicore-unibas-ch/terraform-provider-apisix/internal/pluginsmap"
+	"github.com/scicore-unibas-ch/terraform-provider-apisix/internal/tfconv"
 	"github.com/scicore-unibas-ch/terraform-provider-apisix/internal/timeoutshelper"
 )
 
@@ -69,36 +68,30 @@ type Resource struct {
 func NewResource() resource.Resource { return &Resource{} }
 
 type model struct {
-	ID              types.String `tfsdk:"id"`
-	Name            types.String `tfsdk:"name"`
-	Desc            types.String `tfsdk:"desc"`
-	URI             types.String `tfsdk:"uri"`
-	URIs            types.Set    `tfsdk:"uris"`
-	Host            types.String `tfsdk:"host"`
-	Hosts           types.Set    `tfsdk:"hosts"`
-	RemoteAddr      types.String `tfsdk:"remote_addr"`
-	RemoteAddrs     types.Set    `tfsdk:"remote_addrs"`
-	Methods         types.Set    `tfsdk:"methods"`
-	Priority        types.Int64  `tfsdk:"priority"`
-	Vars            types.String `tfsdk:"vars"`
-	FilterFunc      types.String `tfsdk:"filter_func"`
-	Plugins         types.Map    `tfsdk:"plugins"`
-	Script          types.String `tfsdk:"script"`
-	UpstreamID      types.String `tfsdk:"upstream_id"`
-	Upstream        types.Object `tfsdk:"upstream"`
-	ServiceID       types.String `tfsdk:"service_id"`
-	PluginConfigID  types.String `tfsdk:"plugin_config_id"`
-	Labels          types.Map    `tfsdk:"labels"`
-	Timeout         types.Object `tfsdk:"timeout"`
+	ID              types.String   `tfsdk:"id"`
+	Name            types.String   `tfsdk:"name"`
+	Desc            types.String   `tfsdk:"desc"`
+	URI             types.String   `tfsdk:"uri"`
+	URIs            types.Set      `tfsdk:"uris"`
+	Host            types.String   `tfsdk:"host"`
+	Hosts           types.Set      `tfsdk:"hosts"`
+	RemoteAddr      types.String   `tfsdk:"remote_addr"`
+	RemoteAddrs     types.Set      `tfsdk:"remote_addrs"`
+	Methods         types.Set      `tfsdk:"methods"`
+	Priority        types.Int64    `tfsdk:"priority"`
+	Vars            types.String   `tfsdk:"vars"`
+	FilterFunc      types.String   `tfsdk:"filter_func"`
+	Plugins         types.Map      `tfsdk:"plugins"`
+	Script          types.String   `tfsdk:"script"`
+	UpstreamID      types.String   `tfsdk:"upstream_id"`
+	Upstream        types.Object   `tfsdk:"upstream"`
+	ServiceID       types.String   `tfsdk:"service_id"`
+	PluginConfigID  types.String   `tfsdk:"plugin_config_id"`
+	Labels          types.Map      `tfsdk:"labels"`
+	Timeout         types.Object   `tfsdk:"timeout"`
 	EnableWebsocket types.Bool     `tfsdk:"enable_websocket"`
 	Status          types.Int64    `tfsdk:"status"`
 	Timeouts        timeouts.Value `tfsdk:"timeouts"`
-}
-
-var timeoutAttrTypes = map[string]attr.Type{
-	"connect": types.Int64Type,
-	"send":    types.Int64Type,
-	"read":    types.Int64Type,
 }
 
 func (r *Resource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -106,18 +99,7 @@ func (r *Resource) Metadata(_ context.Context, req resource.MetadataRequest, res
 }
 
 func (r *Resource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-	c, ok := req.ProviderData.(*client.Client)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected provider data",
-			fmt.Sprintf("expected *client.Client, got %T", req.ProviderData),
-		)
-		return
-	}
-	r.client = c
+	r.client = client.FromProviderData(req.ProviderData, &resp.Diagnostics)
 }
 
 func (r *Resource) ConfigValidators(_ context.Context) []resource.ConfigValidator {
@@ -307,52 +289,28 @@ type apiBody struct {
 	ServiceID       *string                    `json:"service_id,omitempty"`
 	PluginConfigID  *string                    `json:"plugin_config_id,omitempty"`
 	Labels          map[string]string          `json:"labels,omitempty"`
-	Timeout         *apiTimeout                `json:"timeout,omitempty"`
+	Timeout         *inlineupstream.Timeout    `json:"timeout,omitempty"`
 	EnableWebsocket *bool                      `json:"enable_websocket,omitempty"`
 	Status          *int64                     `json:"status,omitempty"`
 }
 
-// apiTimeout uses pointers so we can omit fields the user did not set,
-// rather than sending zero (which APISIX would interpret as "no timeout").
-type apiTimeout struct {
-	Connect *int64 `json:"connect,omitempty"`
-	Send    *int64 `json:"send,omitempty"`
-	Read    *int64 `json:"read,omitempty"`
-}
-
 func (r *Resource) buildBody(ctx context.Context, m *model) (*apiBody, diag.Diagnostics) {
 	var diags diag.Diagnostics
-	body := &apiBody{ID: m.ID.ValueString()}
-
-	stringPtr := func(s types.String) *string {
-		if s.IsNull() || s.IsUnknown() {
-			return nil
-		}
-		v := s.ValueString()
-		return &v
-	}
-	body.Name = stringPtr(m.Name)
-	body.Desc = stringPtr(m.Desc)
-	body.URI = stringPtr(m.URI)
-	body.Host = stringPtr(m.Host)
-	body.RemoteAddr = stringPtr(m.RemoteAddr)
-	body.FilterFunc = stringPtr(m.FilterFunc)
-	body.Script = stringPtr(m.Script)
-	body.UpstreamID = stringPtr(m.UpstreamID)
-	body.ServiceID = stringPtr(m.ServiceID)
-	body.PluginConfigID = stringPtr(m.PluginConfigID)
-
-	if !m.Priority.IsNull() && !m.Priority.IsUnknown() {
-		v := m.Priority.ValueInt64()
-		body.Priority = &v
-	}
-	if !m.EnableWebsocket.IsNull() && !m.EnableWebsocket.IsUnknown() {
-		v := m.EnableWebsocket.ValueBool()
-		body.EnableWebsocket = &v
-	}
-	if !m.Status.IsNull() && !m.Status.IsUnknown() {
-		v := m.Status.ValueInt64()
-		body.Status = &v
+	body := &apiBody{
+		ID:              m.ID.ValueString(),
+		Name:            tfconv.StringPtr(m.Name),
+		Desc:            tfconv.StringPtr(m.Desc),
+		URI:             tfconv.StringPtr(m.URI),
+		Host:            tfconv.StringPtr(m.Host),
+		RemoteAddr:      tfconv.StringPtr(m.RemoteAddr),
+		FilterFunc:      tfconv.StringPtr(m.FilterFunc),
+		Script:          tfconv.StringPtr(m.Script),
+		UpstreamID:      tfconv.StringPtr(m.UpstreamID),
+		ServiceID:       tfconv.StringPtr(m.ServiceID),
+		PluginConfigID:  tfconv.StringPtr(m.PluginConfigID),
+		Priority:        tfconv.Int64Ptr(m.Priority),
+		Status:          tfconv.Int64Ptr(m.Status),
+		EnableWebsocket: tfconv.BoolPtr(m.EnableWebsocket),
 	}
 
 	for _, c := range []struct {
@@ -389,26 +347,12 @@ func (r *Resource) buildBody(ctx context.Context, m *model) (*apiBody, diag.Diag
 		body.Vars = json.RawMessage(raw)
 	}
 
-	if !m.Plugins.IsNull() && !m.Plugins.IsUnknown() {
-		plugins := map[string]string{}
-		diags.Append(m.Plugins.ElementsAs(ctx, &plugins, false)...)
-		if diags.HasError() {
-			return nil, diags
-		}
-		body.Plugins = make(map[string]json.RawMessage, len(plugins))
-		for k, v := range plugins {
-			var probe any
-			if err := json.Unmarshal([]byte(v), &probe); err != nil {
-				diags.AddAttributeError(
-					path.Root("plugins").AtMapKey(k),
-					"Invalid plugin JSON",
-					fmt.Sprintf("plugin %q: %v", k, err),
-				)
-				return nil, diags
-			}
-			body.Plugins[k] = json.RawMessage(v)
-		}
+	plugins, d := pluginsmap.Build(ctx, m.Plugins, path.Root("plugins"))
+	diags.Append(d...)
+	if diags.HasError() {
+		return nil, diags
 	}
+	body.Plugins = plugins
 
 	if !m.Labels.IsNull() && !m.Labels.IsUnknown() {
 		labels := map[string]string{}
@@ -429,7 +373,7 @@ func (r *Resource) buildBody(ctx context.Context, m *model) (*apiBody, diag.Diag
 	}
 
 	if !m.Timeout.IsNull() && !m.Timeout.IsUnknown() {
-		to, d := buildTimeout(ctx, m.Timeout)
+		to, d := inlineupstream.BuildTimeout(ctx, m.Timeout)
 		diags.Append(d...)
 		if diags.HasError() {
 			return nil, diags
@@ -438,36 +382,6 @@ func (r *Resource) buildBody(ctx context.Context, m *model) (*apiBody, diag.Diag
 	}
 
 	return body, diags
-}
-
-// buildTimeout converts the timeout object to wire form, omitting fields the
-// user did not set so we never overwrite a server-side default with zero.
-func buildTimeout(ctx context.Context, obj types.Object) (*apiTimeout, diag.Diagnostics) {
-	var diags diag.Diagnostics
-	var t struct {
-		Connect types.Int64 `tfsdk:"connect"`
-		Send    types.Int64 `tfsdk:"send"`
-		Read    types.Int64 `tfsdk:"read"`
-	}
-	diags.Append(obj.As(ctx, &t, basetypes.ObjectAsOptions{})...)
-	if diags.HasError() {
-		return nil, diags
-	}
-
-	out := &apiTimeout{}
-	if !t.Connect.IsNull() && !t.Connect.IsUnknown() {
-		v := t.Connect.ValueInt64()
-		out.Connect = &v
-	}
-	if !t.Send.IsNull() && !t.Send.IsUnknown() {
-		v := t.Send.ValueInt64()
-		out.Send = &v
-	}
-	if !t.Read.IsNull() && !t.Read.IsUnknown() {
-		v := t.Read.ValueInt64()
-		out.Read = &v
-	}
-	return out, diags
 }
 
 func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -608,27 +522,21 @@ func decodeInto(ctx context.Context, raw json.RawMessage, m *model) diag.Diagnos
 	}
 
 	m.ID = types.StringValue(body.ID)
-	m.Name = nullableString(body.Name)
-	m.Desc = nullableString(body.Desc)
-	m.URI = nullableString(body.URI)
-	m.Host = nullableString(body.Host)
-	m.RemoteAddr = nullableString(body.RemoteAddr)
-	m.FilterFunc = nullableString(body.FilterFunc)
-	m.Script = nullableString(body.Script)
-	m.UpstreamID = nullableString(body.UpstreamID)
-	m.ServiceID = nullableString(body.ServiceID)
-	m.PluginConfigID = nullableString(body.PluginConfigID)
+	m.Name = tfconv.NullableString(body.Name)
+	m.Desc = tfconv.NullableString(body.Desc)
+	m.URI = tfconv.NullableString(body.URI)
+	m.Host = tfconv.NullableString(body.Host)
+	m.RemoteAddr = tfconv.NullableString(body.RemoteAddr)
+	m.FilterFunc = tfconv.NullableString(body.FilterFunc)
+	m.Script = tfconv.NullableString(body.Script)
+	m.UpstreamID = tfconv.NullableString(body.UpstreamID)
+	m.ServiceID = tfconv.NullableString(body.ServiceID)
+	m.PluginConfigID = tfconv.NullableString(body.PluginConfigID)
 
-	if body.Priority != nil {
-		m.Priority = types.Int64Value(*body.Priority)
-	} else {
-		m.Priority = types.Int64Value(0)
-	}
-	if body.Status != nil {
-		m.Status = types.Int64Value(*body.Status)
-	} else {
-		m.Status = types.Int64Value(1)
-	}
+	// Optional+Computed attributes: backfill the schema defaults when APISIX
+	// omits the field so refreshed state stays plan-stable.
+	m.Priority = tfconv.Int64OrDefault(body.Priority, 0)
+	m.Status = tfconv.Int64OrDefault(body.Status, 1)
 	if body.EnableWebsocket != nil {
 		m.EnableWebsocket = types.BoolValue(*body.EnableWebsocket)
 	} else {
@@ -640,23 +548,9 @@ func decodeInto(ctx context.Context, raw json.RawMessage, m *model) diag.Diagnos
 	m.RemoteAddrs = nullableStringSet(ctx, body.RemoteAddrs, &diags)
 	m.Methods = nullableStringSet(ctx, body.Methods, &diags)
 
-	if len(body.Vars) == 0 || string(body.Vars) == "null" {
-		m.Vars = types.StringNull()
-	} else {
-		// Re-marshal canonically so the on-disk form is stable; the plan
-		// modifier handles equivalence vs. the user's literal HCL.
-		var v any
-		if err := json.Unmarshal(body.Vars, &v); err == nil {
-			canon, err := json.Marshal(v)
-			if err == nil {
-				m.Vars = types.StringValue(string(canon))
-			} else {
-				m.Vars = types.StringValue(string(body.Vars))
-			}
-		} else {
-			m.Vars = types.StringValue(string(body.Vars))
-		}
-	}
+	// Canonical re-marshal keeps the on-disk form stable; the plan modifier
+	// handles equivalence vs. the user's literal HCL.
+	m.Vars = tfconv.CanonicalJSON(body.Vars)
 
 	if body.Labels == nil {
 		m.Labels = types.MapNull(types.StringType)
@@ -666,27 +560,9 @@ func decodeInto(ctx context.Context, raw json.RawMessage, m *model) diag.Diagnos
 		m.Labels = v
 	}
 
-	pluginStrs := make(map[string]string, len(body.Plugins))
-	for k, v := range body.Plugins {
-		var obj any
-		if err := json.Unmarshal(v, &obj); err != nil {
-			pluginStrs[k] = string(v)
-			continue
-		}
-		canonical, err := json.Marshal(obj)
-		if err != nil {
-			pluginStrs[k] = string(v)
-			continue
-		}
-		pluginStrs[k] = string(canonical)
-	}
-	if len(pluginStrs) == 0 {
-		m.Plugins = types.MapNull(types.StringType)
-	} else {
-		v, d := types.MapValueFrom(ctx, types.StringType, pluginStrs)
-		diags.Append(d...)
-		m.Plugins = v
-	}
+	pVal, d := pluginsmap.Decode(ctx, body.Plugins, true)
+	diags.Append(d...)
+	m.Plugins = pVal
 
 	if len(body.Upstream) == 0 || string(body.Upstream) == "null" {
 		m.Upstream = types.ObjectNull(inlineupstream.AttrTypes)
@@ -697,51 +573,14 @@ func decodeInto(ctx context.Context, raw json.RawMessage, m *model) diag.Diagnos
 	}
 
 	if len(body.Timeout) == 0 || string(body.Timeout) == "null" {
-		m.Timeout = types.ObjectNull(timeoutAttrTypes)
+		m.Timeout = types.ObjectNull(inlineupstream.TimeoutAttrTypes)
 	} else {
-		v, d := decodeTimeout(ctx, body.Timeout)
+		v, d := inlineupstream.DecodeTimeout(body.Timeout)
 		diags.Append(d...)
 		m.Timeout = v
 	}
 
 	return diags
-}
-
-// decodeTimeout decodes the APISIX timeout object. Fields not present in the
-// response are stored as null in state so they don't appear in plans.
-func decodeTimeout(_ context.Context, raw json.RawMessage) (types.Object, diag.Diagnostics) {
-	var diags diag.Diagnostics
-	var t struct {
-		Connect *int64 `json:"connect"`
-		Send    *int64 `json:"send"`
-		Read    *int64 `json:"read"`
-	}
-	if err := json.Unmarshal(raw, &t); err != nil {
-		diags.AddError("Failed to decode timeout", err.Error())
-		return types.ObjectNull(timeoutAttrTypes), diags
-	}
-	attrs := map[string]attr.Value{
-		"connect": optInt64(t.Connect),
-		"send":    optInt64(t.Send),
-		"read":    optInt64(t.Read),
-	}
-	obj, d := types.ObjectValue(timeoutAttrTypes, attrs)
-	diags.Append(d...)
-	return obj, diags
-}
-
-func optInt64(p *int64) types.Int64 {
-	if p == nil {
-		return types.Int64Null()
-	}
-	return types.Int64Value(*p)
-}
-
-func nullableString(s string) types.String {
-	if s == "" {
-		return types.StringNull()
-	}
-	return types.StringValue(s)
 }
 
 func nullableStringSet(ctx context.Context, vals []string, diags *diag.Diagnostics) types.Set {

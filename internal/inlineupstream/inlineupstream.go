@@ -1,15 +1,14 @@
 // Package inlineupstream defines the schema, wire format, and codec for the
-// inline upstream block embedded inside apisix_route and apisix_service.
+// APISIX upstream object. It is used two ways:
 //
-// The inline upstream supports the same fields as the standalone apisix_upstream
-// resource minus the id (which doesn't exist for inline objects). Sharing this
-// definition keeps route, service, and the standalone resource consistent —
-// users get the full APISIX upstream surface whether they reference an upstream
-// by id or define it inline.
+//   - embedded inline inside apisix_route and apisix_service as a
+//     SingleNestedAttribute (via SchemaAttrs / BuildBody / DecodeInto), and
+//   - as the body of the standalone apisix_upstream resource, whose model
+//     embeds Fields and adds the id/timeouts attributes.
 //
-// Note: the standalone apisix_upstream resource currently has its own
-// independent implementation. If you change attributes here, mirror the change
-// in internal/resource/upstream/resource.go.
+// Sharing one definition keeps the three surfaces identical: users get the
+// full APISIX upstream feature set whether they reference an upstream by id
+// or define it inline.
 package inlineupstream
 
 import (
@@ -31,6 +30,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 
 	"github.com/scicore-unibas-ch/terraform-provider-apisix/internal/planmodifier/jsonstring"
+	"github.com/scicore-unibas-ch/terraform-provider-apisix/internal/tfconv"
 )
 
 var (
@@ -93,8 +93,34 @@ var (
 	}
 )
 
-// SchemaAttrs returns the inline upstream attribute set. Callers compose this
-// into a SingleNestedAttribute of the appropriate optionality.
+// Fields is the Terraform-side model of an upstream. Route and service carry
+// it as a types.Object; the standalone apisix_upstream resource embeds it in
+// its model struct (the framework promotes the tagged fields).
+type Fields struct {
+	Name          types.String `tfsdk:"name"`
+	Desc          types.String `tfsdk:"desc"`
+	Type          types.String `tfsdk:"type"`
+	Nodes         types.List   `tfsdk:"nodes"`
+	HealthCheck   types.String `tfsdk:"health_check"`
+	Timeout       types.Object `tfsdk:"timeout"`
+	Retries       types.Int64  `tfsdk:"retries"`
+	RetryTimeout  types.Int64  `tfsdk:"retry_timeout"`
+	Scheme        types.String `tfsdk:"scheme"`
+	Labels        types.Map    `tfsdk:"labels"`
+	ServiceName   types.String `tfsdk:"service_name"`
+	DiscoveryType types.String `tfsdk:"discovery_type"`
+	DiscoveryArgs types.Map    `tfsdk:"discovery_args"`
+	HashOn        types.String `tfsdk:"hash_on"`
+	Key           types.String `tfsdk:"key"`
+	PassHost      types.String `tfsdk:"pass_host"`
+	UpstreamHost  types.String `tfsdk:"upstream_host"`
+	KeepalivePool types.Object `tfsdk:"keepalive_pool"`
+	TLS           types.Object `tfsdk:"tls"`
+}
+
+// SchemaAttrs returns the upstream attribute set. Callers compose this into a
+// SingleNestedAttribute (route/service) or merge it into a resource schema
+// (apisix_upstream).
 func SchemaAttrs() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
 		"name": schema.StringAttribute{
@@ -114,7 +140,7 @@ func SchemaAttrs() map[string]schema.Attribute {
 		},
 		"nodes": schema.ListNestedAttribute{
 			Optional:    true,
-			Description: "Backend nodes.",
+			Description: "Backend nodes. Required when not using service discovery.",
 			NestedObject: schema.NestedAttributeObject{
 				Attributes: map[string]schema.Attribute{
 					"host": schema.StringAttribute{Required: true, Description: "Node hostname or IP."},
@@ -216,7 +242,7 @@ func SchemaAttrs() map[string]schema.Attribute {
 		},
 		"keepalive_pool": schema.SingleNestedAttribute{
 			Optional:    true,
-			Description: "Keepalive pool configuration.",
+			Description: "Keepalive pool configuration. Inner fields default to APISIX's standard pool sizing if a block is provided without them.",
 			Attributes: map[string]schema.Attribute{
 				"size": schema.Int64Attribute{
 					Optional:    true,
@@ -242,21 +268,33 @@ func SchemaAttrs() map[string]schema.Attribute {
 			Optional:    true,
 			Description: "TLS configuration for mTLS to the upstream.",
 			Attributes: map[string]schema.Attribute{
-				"client_cert":    schema.StringAttribute{Optional: true, Sensitive: true, Description: "Client certificate (PEM)."},
-				"client_key":     schema.StringAttribute{Optional: true, Sensitive: true, Description: "Client private key (PEM)."},
-				"client_cert_id": schema.StringAttribute{Optional: true, Description: "Reference to an apisix_ssl object."},
+				"client_cert": schema.StringAttribute{
+					Optional:    true,
+					Sensitive:   true,
+					Description: "Client certificate (PEM). Mutually exclusive with client_cert_id.",
+				},
+				"client_key": schema.StringAttribute{
+					Optional:    true,
+					Sensitive:   true,
+					Description: "Client private key (PEM). Pair with client_cert.",
+				},
+				"client_cert_id": schema.StringAttribute{
+					Optional:    true,
+					Description: "Reference to an apisix_ssl object providing the client certificate.",
+				},
 				"verify": schema.BoolAttribute{
 					Optional:    true,
 					Computed:    true,
 					Default:     booldefault.StaticBool(false),
-					Description: "Verify the server certificate. Defaults to false.",
+					Description: "Verify the server certificate. Currently only effective for kafka upstreams. Defaults to false.",
 				},
 			},
 		},
 	}
 }
 
-// Body is the wire payload for an inline upstream.
+// Body is the wire payload for an upstream. Pointers separate "unset" from
+// "zero".
 type Body struct {
 	Name          *string           `json:"name,omitempty"`
 	Desc          *string           `json:"desc,omitempty"`
@@ -287,6 +325,8 @@ type Node struct {
 	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
+// Timeout uses pointers so fields the user did not set are omitted rather
+// than sent as zero (which APISIX would interpret as "no timeout").
 type Timeout struct {
 	Connect *int64 `json:"connect,omitempty"`
 	Send    *int64 `json:"send,omitempty"`
@@ -306,74 +346,45 @@ type TLS struct {
 	Verify       bool    `json:"verify"`
 }
 
-// BuildBody converts the Terraform inline upstream object to a wire payload.
-// pathBase is used to prefix attribute paths in error diagnostics so the user
-// sees errors like "upstream.health_check" rather than just "health_check".
-func BuildBody(ctx context.Context, obj types.Object, pathBase path.Path) (*Body, diag.Diagnostics) {
+// Body converts the Terraform fields to a wire payload. pathBase prefixes
+// attribute paths in error diagnostics (e.g. "upstream.health_check" for the
+// inline block, "health_check" for the standalone resource).
+func (f *Fields) Body(ctx context.Context, pathBase path.Path) (*Body, diag.Diagnostics) {
 	var diags diag.Diagnostics
-	if obj.IsNull() || obj.IsUnknown() {
-		return nil, diags
-	}
-
-	var u struct {
-		Name          types.String `tfsdk:"name"`
-		Desc          types.String `tfsdk:"desc"`
-		Type          types.String `tfsdk:"type"`
-		Nodes         types.List   `tfsdk:"nodes"`
-		HealthCheck   types.String `tfsdk:"health_check"`
-		Timeout       types.Object `tfsdk:"timeout"`
-		Retries       types.Int64  `tfsdk:"retries"`
-		RetryTimeout  types.Int64  `tfsdk:"retry_timeout"`
-		Scheme        types.String `tfsdk:"scheme"`
-		Labels        types.Map    `tfsdk:"labels"`
-		ServiceName   types.String `tfsdk:"service_name"`
-		DiscoveryType types.String `tfsdk:"discovery_type"`
-		DiscoveryArgs types.Map    `tfsdk:"discovery_args"`
-		HashOn        types.String `tfsdk:"hash_on"`
-		Key           types.String `tfsdk:"key"`
-		PassHost      types.String `tfsdk:"pass_host"`
-		UpstreamHost  types.String `tfsdk:"upstream_host"`
-		KeepalivePool types.Object `tfsdk:"keepalive_pool"`
-		TLS           types.Object `tfsdk:"tls"`
-	}
-	diags.Append(obj.As(ctx, &u, basetypes.ObjectAsOptions{})...)
-	if diags.HasError() {
-		return nil, diags
-	}
 
 	body := &Body{
-		Name:          stringPtr(u.Name),
-		Desc:          stringPtr(u.Desc),
-		Type:          stringPtr(u.Type),
-		Scheme:        stringPtr(u.Scheme),
-		HashOn:        stringPtr(u.HashOn),
-		Key:           stringPtr(u.Key),
-		PassHost:      stringPtr(u.PassHost),
-		UpstreamHost:  stringPtr(u.UpstreamHost),
-		ServiceName:   stringPtr(u.ServiceName),
-		DiscoveryType: stringPtr(u.DiscoveryType),
-		Retries:       int64Ptr(u.Retries),
-		RetryTimeout:  int64Ptr(u.RetryTimeout),
+		Name:          tfconv.StringPtr(f.Name),
+		Desc:          tfconv.StringPtr(f.Desc),
+		Type:          tfconv.StringPtr(f.Type),
+		Scheme:        tfconv.StringPtr(f.Scheme),
+		HashOn:        tfconv.StringPtr(f.HashOn),
+		Key:           tfconv.StringPtr(f.Key),
+		PassHost:      tfconv.StringPtr(f.PassHost),
+		UpstreamHost:  tfconv.StringPtr(f.UpstreamHost),
+		ServiceName:   tfconv.StringPtr(f.ServiceName),
+		DiscoveryType: tfconv.StringPtr(f.DiscoveryType),
+		Retries:       tfconv.Int64Ptr(f.Retries),
+		RetryTimeout:  tfconv.Int64Ptr(f.RetryTimeout),
 	}
 
-	if !u.Labels.IsNull() && !u.Labels.IsUnknown() {
+	if !f.Labels.IsNull() && !f.Labels.IsUnknown() {
 		labels := map[string]string{}
-		diags.Append(u.Labels.ElementsAs(ctx, &labels, false)...)
+		diags.Append(f.Labels.ElementsAs(ctx, &labels, false)...)
 		if diags.HasError() {
 			return nil, diags
 		}
 		body.Labels = labels
 	}
-	if !u.DiscoveryArgs.IsNull() && !u.DiscoveryArgs.IsUnknown() {
+	if !f.DiscoveryArgs.IsNull() && !f.DiscoveryArgs.IsUnknown() {
 		args := map[string]string{}
-		diags.Append(u.DiscoveryArgs.ElementsAs(ctx, &args, false)...)
+		diags.Append(f.DiscoveryArgs.ElementsAs(ctx, &args, false)...)
 		if diags.HasError() {
 			return nil, diags
 		}
 		body.DiscoveryArgs = args
 	}
-	if !u.HealthCheck.IsNull() && !u.HealthCheck.IsUnknown() {
-		raw := u.HealthCheck.ValueString()
+	if !f.HealthCheck.IsNull() && !f.HealthCheck.IsUnknown() {
+		raw := f.HealthCheck.ValueString()
 		var probe any
 		if err := json.Unmarshal([]byte(raw), &probe); err != nil {
 			diags.AddAttributeError(
@@ -385,32 +396,32 @@ func BuildBody(ctx context.Context, obj types.Object, pathBase path.Path) (*Body
 		}
 		body.HealthCheck = json.RawMessage(raw)
 	}
-	if !u.Nodes.IsNull() && !u.Nodes.IsUnknown() {
-		nodes, d := buildNodes(ctx, u.Nodes)
+	if !f.Nodes.IsNull() && !f.Nodes.IsUnknown() {
+		nodes, d := buildNodes(ctx, f.Nodes)
 		diags.Append(d...)
 		if diags.HasError() {
 			return nil, diags
 		}
 		body.Nodes = nodes
 	}
-	if !u.Timeout.IsNull() && !u.Timeout.IsUnknown() {
-		t, d := buildTimeout(ctx, u.Timeout)
+	if !f.Timeout.IsNull() && !f.Timeout.IsUnknown() {
+		t, d := BuildTimeout(ctx, f.Timeout)
 		diags.Append(d...)
 		if diags.HasError() {
 			return nil, diags
 		}
 		body.Timeout = t
 	}
-	if !u.KeepalivePool.IsNull() && !u.KeepalivePool.IsUnknown() {
-		kp, d := buildKeepalive(ctx, u.KeepalivePool)
+	if !f.KeepalivePool.IsNull() && !f.KeepalivePool.IsUnknown() {
+		kp, d := buildKeepalive(ctx, f.KeepalivePool)
 		diags.Append(d...)
 		if diags.HasError() {
 			return nil, diags
 		}
 		body.KeepalivePool = kp
 	}
-	if !u.TLS.IsNull() && !u.TLS.IsUnknown() {
-		t, d := buildTLS(ctx, u.TLS)
+	if !f.TLS.IsNull() && !f.TLS.IsUnknown() {
+		t, d := buildTLS(ctx, f.TLS)
 		diags.Append(d...)
 		if diags.HasError() {
 			return nil, diags
@@ -421,9 +432,27 @@ func BuildBody(ctx context.Context, obj types.Object, pathBase path.Path) (*Body
 	return body, diags
 }
 
-// DecodeInto decodes a raw APISIX upstream JSON object into a types.Object
-// matching AttrTypes.
-func DecodeInto(ctx context.Context, raw json.RawMessage) (types.Object, diag.Diagnostics) {
+// BuildBody converts the inline upstream object (as carried by route/service)
+// to a wire payload.
+func BuildBody(ctx context.Context, obj types.Object, pathBase path.Path) (*Body, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	if obj.IsNull() || obj.IsUnknown() {
+		return nil, diags
+	}
+	var f Fields
+	diags.Append(obj.As(ctx, &f, basetypes.ObjectAsOptions{})...)
+	if diags.HasError() {
+		return nil, diags
+	}
+	body, d := f.Body(ctx, pathBase)
+	diags.Append(d...)
+	return body, diags
+}
+
+// DecodeFields decodes a raw APISIX upstream JSON object into Fields.
+// Optional+Computed attributes that APISIX omitted are backfilled with the
+// schema defaults so refreshed state stays plan-stable.
+func DecodeFields(ctx context.Context, raw json.RawMessage) (Fields, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	var body struct {
 		Name          string            `json:"name"`
@@ -447,86 +476,124 @@ func DecodeInto(ctx context.Context, raw json.RawMessage) (types.Object, diag.Di
 		TLS           json.RawMessage   `json:"tls"`
 	}
 	if err := json.Unmarshal(raw, &body); err != nil {
-		diags.AddError("Failed to decode upstream", err.Error())
-		return types.ObjectNull(AttrTypes), diags
+		diags.AddError("Failed to decode upstream response", err.Error())
+		return Fields{}, diags
 	}
 
-	attrs := map[string]attr.Value{
-		"name":           nullableString(body.Name),
-		"desc":           nullableString(body.Desc),
-		"type":           stringOrDefault(body.Type, "roundrobin"),
-		"scheme":         stringOrDefault(body.Scheme, "http"),
-		"hash_on":        stringOrDefault(body.HashOn, "vars"),
-		"pass_host":      stringOrDefault(body.PassHost, "pass"),
-		"key":            nullableString(body.Key),
-		"upstream_host":  nullableString(body.UpstreamHost),
-		"service_name":   nullableString(body.ServiceName),
-		"discovery_type": nullableString(body.DiscoveryType),
-		"retries":        optInt64(body.Retries),
-		"retry_timeout":  optInt64(body.RetryTimeout),
+	f := Fields{
+		Name:          tfconv.NullableString(body.Name),
+		Desc:          tfconv.NullableString(body.Desc),
+		Type:          tfconv.StringOrDefault(body.Type, "roundrobin"),
+		Scheme:        tfconv.StringOrDefault(body.Scheme, "http"),
+		HashOn:        tfconv.StringOrDefault(body.HashOn, "vars"),
+		PassHost:      tfconv.StringOrDefault(body.PassHost, "pass"),
+		Key:           tfconv.NullableString(body.Key),
+		UpstreamHost:  tfconv.NullableString(body.UpstreamHost),
+		ServiceName:   tfconv.NullableString(body.ServiceName),
+		DiscoveryType: tfconv.NullableString(body.DiscoveryType),
+		Retries:       tfconv.OptInt64(body.Retries),
+		RetryTimeout:  tfconv.OptInt64(body.RetryTimeout),
+		HealthCheck:   tfconv.CanonicalJSON(body.HealthCheck),
 	}
 
 	if body.Labels == nil {
-		attrs["labels"] = types.MapNull(types.StringType)
+		f.Labels = types.MapNull(types.StringType)
 	} else {
 		v, d := types.MapValueFrom(ctx, types.StringType, body.Labels)
 		diags.Append(d...)
-		attrs["labels"] = v
+		f.Labels = v
 	}
 	if body.DiscoveryArgs == nil {
-		attrs["discovery_args"] = types.MapNull(types.StringType)
+		f.DiscoveryArgs = types.MapNull(types.StringType)
 	} else {
 		v, d := types.MapValueFrom(ctx, types.StringType, body.DiscoveryArgs)
 		diags.Append(d...)
-		attrs["discovery_args"] = v
-	}
-
-	if len(body.HealthCheck) == 0 || string(body.HealthCheck) == "null" {
-		attrs["health_check"] = types.StringNull()
-	} else {
-		var v any
-		if err := json.Unmarshal(body.HealthCheck, &v); err == nil {
-			canon, err2 := json.Marshal(v)
-			if err2 == nil {
-				attrs["health_check"] = types.StringValue(string(canon))
-			} else {
-				attrs["health_check"] = types.StringValue(string(body.HealthCheck))
-			}
-		} else {
-			attrs["health_check"] = types.StringValue(string(body.HealthCheck))
-		}
+		f.DiscoveryArgs = v
 	}
 
 	if len(body.Nodes) == 0 || string(body.Nodes) == "null" {
-		attrs["nodes"] = types.ListNull(types.ObjectType{AttrTypes: NodeAttrTypes})
+		f.Nodes = types.ListNull(types.ObjectType{AttrTypes: NodeAttrTypes})
 	} else {
 		v, d := decodeNodes(ctx, body.Nodes)
 		diags.Append(d...)
-		attrs["nodes"] = v
+		f.Nodes = v
 	}
 	if len(body.Timeout) == 0 || string(body.Timeout) == "null" {
-		attrs["timeout"] = types.ObjectNull(TimeoutAttrTypes)
+		f.Timeout = types.ObjectNull(TimeoutAttrTypes)
 	} else {
-		v, d := decodeTimeout(body.Timeout)
+		v, d := DecodeTimeout(body.Timeout)
 		diags.Append(d...)
-		attrs["timeout"] = v
+		f.Timeout = v
 	}
 	if len(body.KeepalivePool) == 0 || string(body.KeepalivePool) == "null" {
-		attrs["keepalive_pool"] = types.ObjectNull(KeepaliveAttrTypes)
+		f.KeepalivePool = types.ObjectNull(KeepaliveAttrTypes)
 	} else {
 		v, d := decodeKeepalive(body.KeepalivePool)
 		diags.Append(d...)
-		attrs["keepalive_pool"] = v
+		f.KeepalivePool = v
 	}
 	if len(body.TLS) == 0 || string(body.TLS) == "null" {
-		attrs["tls"] = types.ObjectNull(TLSAttrTypes)
+		f.TLS = types.ObjectNull(TLSAttrTypes)
 	} else {
 		v, d := decodeTLS(body.TLS)
 		diags.Append(d...)
-		attrs["tls"] = v
+		f.TLS = v
 	}
 
-	obj, d := types.ObjectValue(AttrTypes, attrs)
+	return f, diags
+}
+
+// DecodeInto decodes a raw APISIX upstream JSON object into a types.Object
+// matching AttrTypes (the inline form carried by route/service).
+func DecodeInto(ctx context.Context, raw json.RawMessage) (types.Object, diag.Diagnostics) {
+	f, diags := DecodeFields(ctx, raw)
+	if diags.HasError() {
+		return types.ObjectNull(AttrTypes), diags
+	}
+	obj, d := types.ObjectValueFrom(ctx, AttrTypes, f)
+	diags.Append(d...)
+	return obj, diags
+}
+
+// BuildTimeout converts a connect/send/read timeout object to wire form,
+// omitting fields the user did not set. Also used for the route-level timeout
+// attribute, which has the same shape.
+func BuildTimeout(ctx context.Context, obj types.Object) (*Timeout, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	var t struct {
+		Connect types.Int64 `tfsdk:"connect"`
+		Send    types.Int64 `tfsdk:"send"`
+		Read    types.Int64 `tfsdk:"read"`
+	}
+	diags.Append(obj.As(ctx, &t, basetypes.ObjectAsOptions{})...)
+	if diags.HasError() {
+		return nil, diags
+	}
+	return &Timeout{
+		Connect: tfconv.Int64Ptr(t.Connect),
+		Send:    tfconv.Int64Ptr(t.Send),
+		Read:    tfconv.Int64Ptr(t.Read),
+	}, diags
+}
+
+// DecodeTimeout decodes the APISIX timeout object. Fields not present in the
+// response are stored as null so they don't appear in plans.
+func DecodeTimeout(raw json.RawMessage) (types.Object, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	var t struct {
+		Connect *int64 `json:"connect"`
+		Send    *int64 `json:"send"`
+		Read    *int64 `json:"read"`
+	}
+	if err := json.Unmarshal(raw, &t); err != nil {
+		diags.AddError("Failed to decode timeout", err.Error())
+		return types.ObjectNull(TimeoutAttrTypes), diags
+	}
+	obj, d := types.ObjectValue(TimeoutAttrTypes, map[string]attr.Value{
+		"connect": tfconv.OptInt64(t.Connect),
+		"send":    tfconv.OptInt64(t.Send),
+		"read":    tfconv.OptInt64(t.Read),
+	})
 	diags.Append(d...)
 	return obj, diags
 }
@@ -567,33 +634,6 @@ func buildNodes(ctx context.Context, list types.List) ([]Node, diag.Diagnostics)
 	return out, diags
 }
 
-func buildTimeout(ctx context.Context, obj types.Object) (*Timeout, diag.Diagnostics) {
-	var diags diag.Diagnostics
-	var t struct {
-		Connect types.Int64 `tfsdk:"connect"`
-		Send    types.Int64 `tfsdk:"send"`
-		Read    types.Int64 `tfsdk:"read"`
-	}
-	diags.Append(obj.As(ctx, &t, basetypes.ObjectAsOptions{})...)
-	if diags.HasError() {
-		return nil, diags
-	}
-	out := &Timeout{}
-	if !t.Connect.IsNull() && !t.Connect.IsUnknown() {
-		v := t.Connect.ValueInt64()
-		out.Connect = &v
-	}
-	if !t.Send.IsNull() && !t.Send.IsUnknown() {
-		v := t.Send.ValueInt64()
-		out.Send = &v
-	}
-	if !t.Read.IsNull() && !t.Read.IsUnknown() {
-		v := t.Read.ValueInt64()
-		out.Read = &v
-	}
-	return out, diags
-}
-
 func buildKeepalive(ctx context.Context, obj types.Object) (*Keepalive, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	var kp struct {
@@ -605,6 +645,8 @@ func buildKeepalive(ctx context.Context, obj types.Object) (*Keepalive, diag.Dia
 	if diags.HasError() {
 		return nil, diags
 	}
+	// Inner fields are Optional+Computed+Default, so they're always known
+	// after planning.
 	return &Keepalive{
 		Size:        kp.Size.ValueInt64(),
 		IdleTimeout: kp.IdleTimeout.ValueInt64(),
@@ -624,26 +666,21 @@ func buildTLS(ctx context.Context, obj types.Object) (*TLS, diag.Diagnostics) {
 	if diags.HasError() {
 		return nil, diags
 	}
-	out := &TLS{Verify: t.Verify.ValueBool()}
-	if !t.ClientCert.IsNull() && !t.ClientCert.IsUnknown() {
-		v := t.ClientCert.ValueString()
-		out.ClientCert = &v
-	}
-	if !t.ClientKey.IsNull() && !t.ClientKey.IsUnknown() {
-		v := t.ClientKey.ValueString()
-		out.ClientKey = &v
-	}
-	if !t.ClientCertID.IsNull() && !t.ClientCertID.IsUnknown() {
-		v := t.ClientCertID.ValueString()
-		out.ClientCertID = &v
-	}
-	return out, diags
+	return &TLS{
+		Verify:       t.Verify.ValueBool(),
+		ClientCert:   tfconv.StringPtr(t.ClientCert),
+		ClientKey:    tfconv.StringPtr(t.ClientKey),
+		ClientCertID: tfconv.StringPtr(t.ClientCertID),
+	}, diags
 }
 
 func decodeNodes(ctx context.Context, raw json.RawMessage) (types.List, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	objType := types.ObjectType{AttrTypes: NodeAttrTypes}
 
+	// APISIX returns nodes as either an array (modern) or a map
+	// "host:port" -> weight (legacy). We only emit/handle the array form; the
+	// legacy form is treated as null.
 	var arr []struct {
 		Host     string            `json:"host"`
 		Port     int64             `json:"port"`
@@ -652,7 +689,6 @@ func decodeNodes(ctx context.Context, raw json.RawMessage) (types.List, diag.Dia
 		Metadata map[string]string `json:"metadata"`
 	}
 	if err := json.Unmarshal(raw, &arr); err != nil {
-		// Legacy host:port→weight map form is not modeled.
 		return types.ListNull(objType), diags
 	}
 
@@ -681,26 +717,6 @@ func decodeNodes(ctx context.Context, raw json.RawMessage) (types.List, diag.Dia
 	return list, diags
 }
 
-func decodeTimeout(raw json.RawMessage) (types.Object, diag.Diagnostics) {
-	var diags diag.Diagnostics
-	var t struct {
-		Connect *int64 `json:"connect"`
-		Send    *int64 `json:"send"`
-		Read    *int64 `json:"read"`
-	}
-	if err := json.Unmarshal(raw, &t); err != nil {
-		diags.AddError("Failed to decode timeout", err.Error())
-		return types.ObjectNull(TimeoutAttrTypes), diags
-	}
-	obj, d := types.ObjectValue(TimeoutAttrTypes, map[string]attr.Value{
-		"connect": optInt64(t.Connect),
-		"send":    optInt64(t.Send),
-		"read":    optInt64(t.Read),
-	})
-	diags.Append(d...)
-	return obj, diags
-}
-
 func decodeKeepalive(raw json.RawMessage) (types.Object, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	var k struct {
@@ -713,9 +729,9 @@ func decodeKeepalive(raw json.RawMessage) (types.Object, diag.Diagnostics) {
 		return types.ObjectNull(KeepaliveAttrTypes), diags
 	}
 	obj, d := types.ObjectValue(KeepaliveAttrTypes, map[string]attr.Value{
-		"size":         int64OrDefault(k.Size, 320),
-		"idle_timeout": int64OrDefault(k.IdleTimeout, 60),
-		"requests":     int64OrDefault(k.Requests, 1000),
+		"size":         tfconv.Int64OrDefault(k.Size, 320),
+		"idle_timeout": tfconv.Int64OrDefault(k.IdleTimeout, 60),
+		"requests":     tfconv.Int64OrDefault(k.Requests, 1000),
 	})
 	diags.Append(d...)
 	return obj, diags
@@ -738,62 +754,11 @@ func decodeTLS(raw json.RawMessage) (types.Object, diag.Diagnostics) {
 		verify = *t.Verify
 	}
 	obj, d := types.ObjectValue(TLSAttrTypes, map[string]attr.Value{
-		"client_cert":    optString(t.ClientCert),
-		"client_key":     optString(t.ClientKey),
-		"client_cert_id": optString(t.ClientCertID),
+		"client_cert":    tfconv.OptString(t.ClientCert),
+		"client_key":     tfconv.OptString(t.ClientKey),
+		"client_cert_id": tfconv.OptString(t.ClientCertID),
 		"verify":         types.BoolValue(verify),
 	})
 	diags.Append(d...)
 	return obj, diags
-}
-
-func stringPtr(s types.String) *string {
-	if s.IsNull() || s.IsUnknown() {
-		return nil
-	}
-	v := s.ValueString()
-	return &v
-}
-
-func int64Ptr(i types.Int64) *int64 {
-	if i.IsNull() || i.IsUnknown() {
-		return nil
-	}
-	v := i.ValueInt64()
-	return &v
-}
-
-func nullableString(s string) types.String {
-	if s == "" {
-		return types.StringNull()
-	}
-	return types.StringValue(s)
-}
-
-func stringOrDefault(s, def string) types.String {
-	if s == "" {
-		return types.StringValue(def)
-	}
-	return types.StringValue(s)
-}
-
-func optInt64(p *int64) types.Int64 {
-	if p == nil {
-		return types.Int64Null()
-	}
-	return types.Int64Value(*p)
-}
-
-func int64OrDefault(p *int64, def int64) types.Int64 {
-	if p == nil {
-		return types.Int64Value(def)
-	}
-	return types.Int64Value(*p)
-}
-
-func optString(p *string) types.String {
-	if p == nil || *p == "" {
-		return types.StringNull()
-	}
-	return types.StringValue(*p)
 }
