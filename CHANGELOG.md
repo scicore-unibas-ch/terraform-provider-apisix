@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **APISIX 3.17 verified in CI.** The acceptance matrix now runs against APISIX 3.14, 3.15, 3.16, and 3.17. No provider changes were needed: because `plugins` is modelled as an opaque map of JSON-encoded values (validated as JSON but not schema-bound per plugin), every plugin APISIX 3.17 adds — `acl`, `data-mask`, `saml-auth`, `dingtalk-auth`, `feishu-auth`, `error-page`, `graphql-limit-count`, `graphql-proxy-cache`, `proxy-buffering`, `oas-validator`, `traffic-label`, `exit-transformer`, and the rest — works out of the box by placing its configuration in a `plugins = { ... }` block. New fields on existing plugins are likewise supported with no upgrade.
+
 - **Plan-time validation of upstream mutual exclusions.** The cross-attribute rules APISIX enforces server-side now fail `validate`/`plan` instead of `apply`, on `apisix_upstream` and on the inline `upstream` block of `apisix_route` / `apisix_service`: `nodes` conflicts with `service_name` / `discovery_type` (and those two must be set together); `tls.client_cert` conflicts with `tls.client_cert_id` and must be paired with `tls.client_key`; and `pass_host = "rewrite"` requires `upstream_host` (custom validator, resolved relative to the upstream object so it covers both the standalone resource and the inline blocks).
 
 - **Go acceptance tests for every resource.** `TestAcc<Name>_stateStability` now exists for all 8 resources (previously only `consumer_group` and `plugin_metadata`), each covering create → in-place update (PUT full replace) → no-op re-plan → `ImportStateVerify`. Shared harness boilerplate moved to `internal/acctest`.

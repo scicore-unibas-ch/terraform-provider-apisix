@@ -11,7 +11,7 @@ services:
       retries: 3
 
   apisix:
-    image: apache/apisix:3.16.0-debian
+    image: apache/apisix:3.17.0-debian
     depends_on:
       etcd:
         condition: service_healthy
