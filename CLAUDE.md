@@ -24,7 +24,7 @@ The provider was rewritten from SDK v2 to the Plugin Framework in v0.2.0 — cle
 - `internal/resource/<name>/resource_test.go` — Go `resource.Test` acceptance tests, gated on `TF_ACC=1`.
 - `docs/resources/<name>.md` — OpenTofu Registry docs, hand-written (not `tfplugindocs`-generated).
 - `examples/resources/apisix_<name>/{basic,advanced}/main.tf` — registry example fixtures.
-- `.github/workflows/acceptance-tests.yml` — per-resource bash test step, runs against APISIX 3.14 / 3.15 / 3.16.
+- `.github/workflows/acceptance-tests.yml` — per-resource bash test step, runs against APISIX 3.14 / 3.15 / 3.16 / 3.17.
 
 ## Resource conventions (use `consumergroup` and `pluginmetadata` as references)
 
@@ -77,7 +77,7 @@ The provider was rewritten from SDK v2 to the Plugin Framework in v0.2.0 — cle
 - `make test-acceptance` — full bash + Go acceptance suite against the stack.
 - Go-only acceptance: `TF_ACC=1 APISIX_BASE_URL=http://localhost:9180/apisix/admin APISIX_ADMIN_KEY=test123456789 go test ./... -run '^TestAcc' -v`.
 - **Rebuild the binary** (`go build -o terraform-provider-apisix .`) after every provider-code change before bash tests — `dev_overrides` loads the binary, not source.
-- CI matrix: APISIX 3.14 / 3.15 / 3.16.
+- CI matrix: APISIX 3.14 / 3.15 / 3.16 / 3.17.
 
 ## Release process
 
