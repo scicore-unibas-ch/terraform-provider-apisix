@@ -128,15 +128,15 @@ resource "apisix_upstream" "discovered" {
 - `name` — (Optional) Human-readable name.
 - `desc` — (Optional) Description.
 - `type` — (Optional, Computed, Default `roundrobin`) Load-balancing algorithm. One of `roundrobin`, `chash`, `ewma`, `least_conn`. Always populated in state after apply.
-- `nodes` — (Optional) List of backend nodes. Required when not using service discovery. See [Nodes](#nodes) below.
+- `nodes` — (Optional) List of backend nodes. Required when not using service discovery; conflicts with `service_name` / `discovery_type`. See [Nodes](#nodes) below.
 - `health_check` — (Optional) JSON-encoded active/passive health-check configuration. JSON-equivalent values are suppressed.
 - `timeout` — (Optional) Connect/send/read timeout overrides (seconds). Object with optional `connect`, `send`, `read` integer fields.
 - `retries` — (Optional) Number of retry attempts.
 - `retry_timeout` — (Optional) Total retry timeout in seconds.
 - `scheme` — (Optional, Computed, Default `http`) Upstream protocol. One of `grpc`, `grpcs`, `http`, `https`, `tcp`, `tls`, `udp`, `kafka`. Always populated in state after apply.
 - `labels` — (Optional) Map of string key/value pairs.
-- `service_name` — (Optional) Service name for service discovery (alternative to `nodes`).
-- `discovery_type` — (Optional) Service discovery type (e.g. `consul`, `nacos`, `eureka`).
+- `service_name` — (Optional) Service name for service discovery. Conflicts with `nodes`; must be set together with `discovery_type`.
+- `discovery_type` — (Optional) Service discovery type (e.g. `consul`, `nacos`, `eureka`). Conflicts with `nodes`; must be set together with `service_name`.
 - `discovery_args` — (Optional) Map of service-discovery arguments (e.g. `namespace_id`, `group_name`).
 - `hash_on` — (Optional, Computed, Default `vars`) Source of the hashing key for `chash`. One of `vars`, `header`, `cookie`, `consumer`, `vars_combinations`. Always populated in state after apply.
 - `key` — (Optional) Hashing key for `chash` (e.g. `remote_addr`, `uri`, `arg_name`).
@@ -163,9 +163,9 @@ Each entry in `nodes` is an object with:
 
 ### TLS
 
-- `client_cert` — (Optional, Sensitive) Client certificate (PEM).
-- `client_key` — (Optional, Sensitive) Client private key (PEM).
-- `client_cert_id` — (Optional) Reference to an SSL object (alternative to inline cert/key).
+- `client_cert` — (Optional, Sensitive) Client certificate (PEM). Must be set together with `client_key`; conflicts with `client_cert_id`.
+- `client_key` — (Optional, Sensitive) Client private key (PEM). Must be set together with `client_cert`.
+- `client_cert_id` — (Optional) Reference to an SSL object (alternative to inline cert/key); conflicts with `client_cert`.
 - `verify` — (Optional, Default `false`) Verify the server certificate. Currently only effective for `kafka` upstreams.
 
 ## Import

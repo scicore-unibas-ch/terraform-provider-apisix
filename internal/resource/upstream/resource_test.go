@@ -1,6 +1,7 @@
 package upstream_test
 
 import (
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -111,6 +112,40 @@ resource "apisix_upstream" "full" {
   }
 }
 `
+
+// The cross-attribute rules shared with the inline upstream block must fail
+// at plan time, before anything reaches APISIX.
+func TestAccUpstream_configValidators(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: `
+resource "apisix_upstream" "conflict" {
+  id             = "tf-acc-upstream-conflict"
+  nodes          = [{ host = "127.0.0.1", port = 8081 }]
+  service_name   = "api-service"
+  discovery_type = "consul"
+}
+`,
+				ExpectError: regexp.MustCompile(`Invalid Attribute Combination`),
+			},
+			{
+				Config: `
+resource "apisix_upstream" "orphan_key" {
+  id    = "tf-acc-upstream-orphan-key"
+  nodes = [{ host = "127.0.0.1", port = 8081 }]
+  tls = {
+    client_cert = "dummy"
+  }
+}
+`,
+				ExpectError: regexp.MustCompile(`Invalid Attribute Combination`),
+			},
+		},
+	})
+}
 
 func TestAccUpstream_stateStability(t *testing.T) {
 	resource.Test(t, resource.TestCase{

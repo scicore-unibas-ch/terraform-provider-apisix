@@ -29,9 +29,10 @@ import (
 const apiKind = "upstreams"
 
 var (
-	_ resource.Resource                = (*Resource)(nil)
-	_ resource.ResourceWithConfigure   = (*Resource)(nil)
-	_ resource.ResourceWithImportState = (*Resource)(nil)
+	_ resource.Resource                     = (*Resource)(nil)
+	_ resource.ResourceWithConfigure        = (*Resource)(nil)
+	_ resource.ResourceWithImportState      = (*Resource)(nil)
+	_ resource.ResourceWithConfigValidators = (*Resource)(nil)
 )
 
 // Resource is the apisix_upstream resource.
@@ -56,6 +57,10 @@ func (r *Resource) Metadata(_ context.Context, req resource.MetadataRequest, res
 
 func (r *Resource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	r.client = client.FromProviderData(req.ProviderData, &resp.Diagnostics)
+}
+
+func (r *Resource) ConfigValidators(_ context.Context) []resource.ConfigValidator {
+	return inlineupstream.ConfigValidators(path.MatchRoot)
 }
 
 func (r *Resource) Schema(ctx context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {

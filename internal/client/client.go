@@ -39,9 +39,9 @@ type Client struct {
 	http *http.Client
 }
 
-// Response is the standard APISIX Admin API envelope.
+// Response is the standard APISIX Admin API envelope. Only the value is
+// decoded; the envelope's key field duplicates what callers already know.
 type Response struct {
-	Key   string          `json:"key"`
 	Value json.RawMessage `json:"value"`
 }
 

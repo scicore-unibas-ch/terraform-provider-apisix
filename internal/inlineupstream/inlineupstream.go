@@ -16,10 +16,12 @@ import (
 	"encoding/json"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
@@ -290,6 +292,23 @@ func SchemaAttrs() map[string]schema.Attribute {
 				},
 			},
 		},
+	}
+}
+
+// ConfigValidators returns the cross-attribute rules APISIX enforces on an
+// upstream object, so invalid combinations fail at plan time instead of
+// apply. attr maps an attribute name to its path expression: pass
+// path.MatchRoot for the standalone apisix_upstream resource, or a prefixed
+// expression (upstream.<name>) for the inline block in route/service.
+func ConfigValidators(attr func(name string) path.Expression) []resource.ConfigValidator {
+	return []resource.ConfigValidator{
+		// A static node list and service discovery are mutually exclusive.
+		resourcevalidator.Conflicting(attr("nodes"), attr("discovery_type")),
+		resourcevalidator.Conflicting(attr("nodes"), attr("service_name")),
+		resourcevalidator.RequiredTogether(attr("service_name"), attr("discovery_type")),
+		// Inline client cert/key pair vs. reference to an apisix_ssl object.
+		resourcevalidator.Conflicting(attr("tls").AtName("client_cert"), attr("tls").AtName("client_cert_id")),
+		resourcevalidator.RequiredTogether(attr("tls").AtName("client_cert"), attr("tls").AtName("client_key")),
 	}
 }
 

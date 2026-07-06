@@ -10,12 +10,8 @@ import (
 	"github.com/scicore-unibas-ch/terraform-provider-apisix/internal/provider"
 )
 
-var (
-	version = "dev"
-	commit  = "unknown"
-)
-
-var _ = commit // silence unused warning; commit is set via -ldflags at release time
+// version is set via -ldflags at release time.
+var version = "dev"
 
 func main() {
 	var debug bool

@@ -72,7 +72,7 @@ func (r *Resource) Configure(_ context.Context, req resource.ConfigureRequest, r
 }
 
 func (r *Resource) ConfigValidators(_ context.Context) []resource.ConfigValidator {
-	return []resource.ConfigValidator{
+	validators := []resource.ConfigValidator{
 		// APISIX rejects setting both script and plugins.
 		resourcevalidator.Conflicting(
 			path.MatchRoot("script"),
@@ -84,6 +84,11 @@ func (r *Resource) ConfigValidators(_ context.Context) []resource.ConfigValidato
 			path.MatchRoot("upstream"),
 		),
 	}
+	// The inline upstream carries the same cross-attribute rules as the
+	// standalone apisix_upstream resource.
+	return append(validators, inlineupstream.ConfigValidators(func(name string) path.Expression {
+		return path.MatchRoot("upstream").AtName(name)
+	})...)
 }
 
 func (r *Resource) Schema(ctx context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {

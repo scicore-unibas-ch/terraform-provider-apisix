@@ -30,7 +30,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -103,13 +102,18 @@ func (r *Resource) Configure(_ context.Context, req resource.ConfigureRequest, r
 }
 
 func (r *Resource) ConfigValidators(_ context.Context) []resource.ConfigValidator {
-	return []resource.ConfigValidator{
+	validators := []resource.ConfigValidator{
 		resourcevalidator.Conflicting(path.MatchRoot("uri"), path.MatchRoot("uris")),
 		resourcevalidator.Conflicting(path.MatchRoot("host"), path.MatchRoot("hosts")),
 		resourcevalidator.Conflicting(path.MatchRoot("remote_addr"), path.MatchRoot("remote_addrs")),
 		resourcevalidator.Conflicting(path.MatchRoot("script"), path.MatchRoot("plugins")),
 		resourcevalidator.Conflicting(path.MatchRoot("upstream_id"), path.MatchRoot("upstream")),
 	}
+	// The inline upstream carries the same cross-attribute rules as the
+	// standalone apisix_upstream resource.
+	return append(validators, inlineupstream.ConfigValidators(func(name string) path.Expression {
+		return path.MatchRoot("upstream").AtName(name)
+	})...)
 }
 
 func (r *Resource) Schema(ctx context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
@@ -258,9 +262,6 @@ func (r *Resource) Schema(ctx context.Context, _ resource.SchemaRequest, resp *r
 				Description: "Route status: 1 = enabled, 0 = disabled. Defaults to 1.",
 				Validators: []validator.Int64{
 					int64validator.OneOf(0, 1),
-				},
-				PlanModifiers: []planmodifier.Int64{
-					int64planmodifier.UseStateForUnknown(),
 				},
 			},
 		},
