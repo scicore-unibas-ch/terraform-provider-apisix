@@ -143,6 +143,30 @@ resource "apisix_upstream" "orphan_key" {
 `,
 				ExpectError: regexp.MustCompile(`Invalid Attribute Combination`),
 			},
+			{
+				Config: `
+resource "apisix_upstream" "rewrite_no_host" {
+  id        = "tf-acc-upstream-rewrite-no-host"
+  nodes     = [{ host = "127.0.0.1", port = 8081 }]
+  pass_host = "rewrite"
+}
+`,
+				ExpectError: regexp.MustCompile(`Missing upstream_host`),
+			},
+			{
+				// The valid rewrite combination must still apply cleanly.
+				Config: `
+resource "apisix_upstream" "rewrite_ok" {
+  id            = "tf-acc-upstream-rewrite-ok"
+  nodes         = [{ host = "127.0.0.1", port = 8081 }]
+  pass_host     = "rewrite"
+  upstream_host = "internal.example.com"
+}
+`,
+				Check: resource.TestCheckResourceAttr(
+					"apisix_upstream.rewrite_ok", "upstream_host", "internal.example.com",
+				),
+			},
 		},
 	})
 }

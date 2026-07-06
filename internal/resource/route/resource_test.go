@@ -1,6 +1,7 @@
 package route_test
 
 import (
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -92,6 +93,30 @@ resource "apisix_route" "basic" {
   }
 }
 `
+
+// The shared upstream validators must also fire on the inline block (nested
+// paths resolve relative to the upstream object).
+func TestAccRoute_inlineUpstreamValidators(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: `
+resource "apisix_route" "rewrite_no_host" {
+  id  = "tf-acc-route-rewrite-no-host"
+  uri = "/tf-acc-invalid/*"
+  upstream = {
+    nodes     = [{ host = "127.0.0.1", port = 8081 }]
+    pass_host = "rewrite"
+  }
+}
+`,
+				ExpectError: regexp.MustCompile(`Missing upstream_host`),
+			},
+		},
+	})
+}
 
 func TestAccRoute_stateStability(t *testing.T) {
 	resource.Test(t, resource.TestCase{

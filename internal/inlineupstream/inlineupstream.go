@@ -236,7 +236,10 @@ func SchemaAttrs() map[string]schema.Attribute {
 			Computed:    true,
 			Default:     stringdefault.StaticString("pass"),
 			Description: "How to set the upstream Host header. Defaults to pass.",
-			Validators:  []validator.String{stringvalidator.OneOf(validPassHosts...)},
+			Validators: []validator.String{
+				stringvalidator.OneOf(validPassHosts...),
+				rewriteRequiresUpstreamHost{},
+			},
 		},
 		"upstream_host": schema.StringAttribute{
 			Optional:    true,
@@ -292,6 +295,42 @@ func SchemaAttrs() map[string]schema.Attribute {
 				},
 			},
 		},
+	}
+}
+
+// rewriteRequiresUpstreamHost enforces APISIX's conditional requirement that
+// pass_host = "rewrite" comes with an upstream_host. It resolves
+// upstream_host relative to its own path, so it works unchanged on the
+// standalone resource (root level) and inside the inline upstream block.
+type rewriteRequiresUpstreamHost struct{}
+
+func (rewriteRequiresUpstreamHost) Description(context.Context) string {
+	return `upstream_host must be set when pass_host is "rewrite"`
+}
+
+func (v rewriteRequiresUpstreamHost) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (rewriteRequiresUpstreamHost) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() || req.ConfigValue.ValueString() != "rewrite" {
+		return
+	}
+
+	hostPath := req.Path.ParentPath().AtName("upstream_host")
+	var host types.String
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, hostPath, &host)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	// Unknown means the value comes from another resource and only resolves
+	// at apply time; give it the benefit of the doubt.
+	if host.IsNull() {
+		resp.Diagnostics.AddAttributeError(
+			req.Path,
+			"Missing upstream_host",
+			`upstream_host must be set when pass_host is "rewrite".`,
+		)
 	}
 }
 

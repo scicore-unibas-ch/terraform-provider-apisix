@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- **Plan-time validation of upstream mutual exclusions.** The cross-attribute rules APISIX enforces server-side now fail `validate`/`plan` instead of `apply`, on `apisix_upstream` and on the inline `upstream` block of `apisix_route` / `apisix_service`: `nodes` conflicts with `service_name` / `discovery_type` (and those two must be set together); `tls.client_cert` conflicts with `tls.client_cert_id` and must be paired with `tls.client_key`.
+- **Plan-time validation of upstream mutual exclusions.** The cross-attribute rules APISIX enforces server-side now fail `validate`/`plan` instead of `apply`, on `apisix_upstream` and on the inline `upstream` block of `apisix_route` / `apisix_service`: `nodes` conflicts with `service_name` / `discovery_type` (and those two must be set together); `tls.client_cert` conflicts with `tls.client_cert_id` and must be paired with `tls.client_key`; and `pass_host = "rewrite"` requires `upstream_host` (custom validator, resolved relative to the upstream object so it covers both the standalone resource and the inline blocks).
 
 - **Go acceptance tests for every resource.** `TestAcc<Name>_stateStability` now exists for all 8 resources (previously only `consumer_group` and `plugin_metadata`), each covering create → in-place update (PUT full replace) → no-op re-plan → `ImportStateVerify`. Shared harness boilerplate moved to `internal/acctest`.
 - **Unit tests for the HTTP client** (`internal/client`): httptest-backed coverage of the 5xx retry/backoff loop, retry exhaustion, no-retry on 4xx, the `ErrNotFound` sentinel, `force=true` delete, error-message fallbacks (`error_msg` → `message` → raw body), and context cancellation.
