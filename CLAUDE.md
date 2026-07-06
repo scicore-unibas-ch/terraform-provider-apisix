@@ -31,16 +31,17 @@ The provider was rewritten from SDK v2 to the Plugin Framework in v0.2.0 — cle
 - `id` is `Required` + `RequiresReplace`. Never reuse `name` as the URL key.
 - Update calls `client.Put` (full replace). Never PATCH.
 - On Create and Update, set state = plan verbatim (Framework strict mode). Let Read reconcile drift.
-- API body uses pointer fields (`*string`) so omitted vs. empty is distinguishable.
-- Validate plugin/metadata JSON in `buildBody` — emit an attribute-scoped diagnostic, never silently drop.
+- API body uses pointer fields (`*string`) so omitted vs. empty is distinguishable. Convert with `tfconv.StringPtr` / `Int64Ptr` / `BoolPtr`; decode with `tfconv.NullableString` / `OptInt64` / `StringOrDefault` etc.
+- `Configure` is one line: `r.client = client.FromProviderData(req.ProviderData, &resp.Diagnostics)`.
+- Plugins maps: `pluginsmap.Build` in `buildBody` (validates each value as JSON with an attribute-scoped diagnostic — never silently drop) and `pluginsmap.Decode` in `decodeInto` (canonicalizes; `emptyAsNull=true` for Optional plugins, `false` for Required). Single-JSON-blob attrs (`metadata`, `vars`, `health_check`): validate in `buildBody`, decode via `tfconv.CanonicalJSON` — canonical key order is required for `ImportStateVerify` text equality.
 - Plugin maps → `jsonmap.SuppressEquivalent()`. Single JSON-string attrs → `jsonstring.SuppressEquivalent()`.
-- In `decodeInto`, unmarshal nested JSON into `map[string]any` (not `map[string]json.RawMessage`) so `json.Marshal` sorts keys recursively. Required for `ImportStateVerify` text equality.
+- Cross-attribute rules APISIX enforces server-side should fail at plan time: `resourcevalidator.Conflicting`/`RequiredTogether` in `ConfigValidators`, or a custom attribute validator for conditional requirements (see `rewriteRequiresUpstreamHost` in inlineupstream, which uses `req.Path.ParentPath()` so it works at root and nested levels).
 - APISIX echoes synthetic fields into GET response bodies (`id`, `create_time`, `update_time`). Strip them in `decodeInto`.
 
 ## Adding a resource: full checklist
 
 1. `internal/resource/<name>/resource.go` — Plugin Framework resource (Create/Read/Update/Delete/ImportState).
-2. `internal/resource/<name>/resource_test.go` — `TestAcc<Name>_stateStability` covering apply → no-op re-plan → `ImportStateVerify`.
+2. `internal/resource/<name>/resource_test.go` — `TestAcc<Name>_stateStability` covering apply → in-place update → no-op re-plan → `ImportStateVerify`. Use the `internal/acctest` harness (`acctest.PreCheck`, `acctest.ProtoV6ProviderFactories`). Add an `ExpectError` test for any ConfigValidators.
 3. `tests/acceptance/<name>/main.tf` + `test.sh` (chmod +x) — multi-fixture bash harness: create, no-op replan, destroy, import round-trip.
 4. `docs/resources/<name>.md` — frontmatter + Example Usage + Argument Reference + Import section.
 5. `examples/resources/apisix_<name>/{basic,advanced}/main.tf` — runnable examples. Apply + no-op replan + destroy against the live APISIX docker stack **before committing**.
