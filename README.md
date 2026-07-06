@@ -70,6 +70,28 @@ cd terraform-provider-apisix
 make build
 ```
 
+## Provider Configuration
+
+The `apisix` provider accepts the following arguments. Every argument is optional in the schema; `base_url` and `admin_key` are required in practice and may be supplied either in HCL or via environment variables.
+
+| Argument | Environment variable | Description |
+| --- | --- | --- |
+| `base_url` | `APISIX_BASE_URL` | Base URL of the APISIX Admin API, e.g. `http://localhost:9180/apisix/admin`. |
+| `admin_key` | `APISIX_ADMIN_KEY` | Admin API key (sensitive). |
+| `timeout` | — | HTTP client timeout in seconds. Default: `30`. |
+| `insecure` | — | Skip TLS certificate verification for HTTPS endpoints. Default: `false`. |
+
+```hcl
+provider "apisix" {
+  base_url  = "https://apisix.internal:9180/apisix/admin"
+  admin_key = var.apisix_admin_key
+  timeout   = 30
+  insecure  = false
+}
+```
+
+Leaving `base_url` / `admin_key` out of the block falls back to `APISIX_BASE_URL` / `APISIX_ADMIN_KEY`, which keeps the admin key out of your configuration and state.
+
 ## Quick start
 
 ```hcl
@@ -155,14 +177,16 @@ resource "apisix_global_rule" "rate_limit" {
 }
 ```
 
-## Migrating from 0.1.x
+## Importing existing resources
 
-The provider was rewritten on the Plugin Framework in 0.2.0 with two breaking changes that affect every resource. See [CHANGELOG.md](CHANGELOG.md#unreleased) for the full list and a manual migration guide.
+Every resource supports `terraform import`, keyed by the APISIX Admin API `id`:
 
-In short:
+```bash
+terraform import apisix_route.api api-route
+terraform import apisix_upstream.backend backend-service
+```
 
-1. Add `id = "..."` to every resource (it is now the explicit URL key, replacing `name`/`username`/`group_id`/`rule_id`/`config_id`).
-2. Switch nested objects from block syntax to attribute syntax: `nodes = [{...}]`, `timeout = {...}`, `upstream = {...}`, `keepalive_pool = {...}`, `tls = {...}`.
+The `id` is the URL key under `/apisix/admin/<kind>/<id>` — the same value you set as `id` in HCL. See the **Import** section of each resource's page under [`docs/resources/`](docs/resources/) for per-resource details.
 
 ## Debugging
 
