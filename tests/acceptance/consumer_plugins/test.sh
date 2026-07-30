@@ -47,11 +47,25 @@ delete_consumers() {
     done
 }
 
+# Parse the response instead of grepping it. The Admin API wraps the object as
+# {"value":{...},"key":"/apisix/consumers/<name>",...}, so a body carrying a
+# key-auth credential contains TWO "key" fields and their order is not stable
+# across APISIX versions — grep + head picked the etcd path on some of them.
+# consumer_field <consumer> <python expression over the unwrapped object>
+consumer_field() {
+    api GET "/consumers/$1" | python3 -c "
+import json, sys
+obj = json.load(sys.stdin)
+obj = obj.get('value', obj)
+print($2)
+"
+}
+
 # assert_credential_intact <consumer>
 assert_credential_intact() {
     local consumer="$1"
     local got
-    got=$(api GET "/consumers/$consumer" | grep -o "\"key\":\"[^\"]*\"" | head -1 | cut -d'"' -f4)
+    got=$(consumer_field "$consumer" "obj.get('plugins', {}).get('key-auth', {}).get('key', '')")
     if [ "$got" != "$CREDENTIAL-$consumer" ]; then
         echo "✗ credential on $consumer was modified: got '$got', want '$CREDENTIAL-$consumer'"
         exit 1
@@ -61,12 +75,11 @@ assert_credential_intact() {
 
 # assert_plugin <consumer> <plugin> <present|absent>
 assert_plugin() {
-    local consumer="$1" plugin="$2" want="$3" body
-    body=$(api GET "/consumers/$consumer")
-    if echo "$body" | grep -q "\"$plugin\""; then
-        [ "$want" = "present" ] || { echo "✗ $plugin still on $consumer"; exit 1; }
-    else
-        [ "$want" = "absent" ] || { echo "✗ $plugin missing from $consumer"; exit 1; }
+    local consumer="$1" plugin="$2" want="$3" got
+    got=$(consumer_field "$consumer" "'present' if '$plugin' in obj.get('plugins', {}) else 'absent'")
+    if [ "$got" != "$want" ]; then
+        echo "✗ $plugin is $got on $consumer, expected $want"
+        exit 1
     fi
     echo "  ✓ $plugin $want on $consumer"
 }
