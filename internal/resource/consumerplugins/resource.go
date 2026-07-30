@@ -20,8 +20,11 @@
 //
 //	This is not atomic: if the owning system rewrites the same consumer
 //	between our GET and our PUT, that write is lost. The window is
-//	milliseconds and the owning system typically writes only on first login
-//	or key rotation, but do not run an apply in a loop against a busy portal.
+//	milliseconds and the owning system typically writes the consumer only
+//	when creating a user, but do not run an apply in a loop against a busy
+//	portal. Owning systems can avoid the overlap entirely by keeping their
+//	credentials in Credential objects (/consumers/{u}/credentials/{id},
+//	APISIX 3.11+) so key rotation never touches the consumer at all.
 //
 //	The same race applies to this resource against itself: two instances
 //	pointing at one consumer are applied in parallel by Terraform and one

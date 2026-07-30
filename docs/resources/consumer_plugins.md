@@ -94,8 +94,10 @@ resource "apisix_consumer_plugins" "quota" {
 
 **Writes are read-modify-write.** The APISIX Admin API does not support `PATCH` on `/consumers/{username}` (unlike routes, services and consumer groups), so every write is `GET` → merge the managed keys → `PUT` the whole object. Three consequences:
 
-- **Not atomic.** If the owning system rewrites the same consumer between the read and the write, that write is lost. The window is milliseconds, and owning systems typically write only at user creation or credential rotation — but do not run applies in a tight loop against a busy provisioner.
-- **An external full rewrite drops the managed plugins.** A `PUT` from the owning system (e.g. a credential rotation) replaces the whole object, plugins included. The next `terraform apply` restores them on top of the new credential; nothing else is lost. Plan output will show the resource as needing to be created again.
+- **Not atomic.** If the owning system rewrites the same consumer between the read and the write, that write is lost. The window is milliseconds, and owning systems typically write the consumer only when creating a user — but do not run applies in a tight loop against a busy provisioner.
+- **An external full rewrite drops the managed plugins.** A `PUT` from the owning system — re-provisioning a user, or any tool that writes the whole consumer — replaces the object, plugins included. The next `terraform apply` restores them; nothing else is lost, and plan output shows the resource as needing to be created again.
+
+  You can design this away: keep the owning system's credentials in [Credential](https://apisix.apache.org/docs/apisix/terminology/credential/) objects (`/consumers/{username}/credentials/{id}`, APISIX 3.11+) rather than in the consumer's `plugins` map. Credential writes and consumer writes then touch different objects, so key rotation — the most frequent write in most provisioning systems — never disturbs the plugins managed here.
 - **Delete detaches, it does not destroy.** `terraform destroy` removes the managed plugin keys and leaves the consumer, its credentials and its other plugins in place.
 
 **Read only reflects managed keys.** Plugins added to the consumer by anyone else are ignored, not reported as drift. If every managed key disappears, the resource is removed from state.
