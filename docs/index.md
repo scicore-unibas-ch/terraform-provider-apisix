@@ -18,7 +18,7 @@ terraform {
   required_providers {
     apisix = {
       source  = "scicore-unibas-ch/apisix"
-      version = "~> 0.3"
+      version = "~> 0.5"
     }
   }
 }
@@ -64,6 +64,7 @@ export APISIX_ADMIN_KEY="your-admin-key"
 - [apisix_service](resources/service.md) — reusable bundle of host/plugin/upstream config.
 - [apisix_consumer](resources/consumer.md) — authenticated API client identity.
 - [apisix_consumer_group](resources/consumer_group.md) — group of consumers sharing plugin configuration.
+- [apisix_consumer_plugins](resources/consumer_plugins.md) — plugins on a consumer owned by another system, without owning its credentials.
 - [apisix_plugin_config](resources/plugin_config.md) — reusable bundle of plugins for routes.
 - [apisix_global_rule](resources/global_rule.md) — plugins applied to every request through APISIX.
 - [apisix_plugin_metadata](resources/plugin_metadata.md) — per-plugin global configuration (log formats, exporter endpoints, defaults).

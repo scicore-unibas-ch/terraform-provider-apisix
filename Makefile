@@ -1,4 +1,10 @@
-.PHONY: build test test-acceptance test-acceptance-single test-env-up test-env-down test-env-logs clean
+.PHONY: build test test-acceptance test-acceptance-single test-env-up test-env-down test-env-logs wait-for-apisix clean
+
+# Admin API of the test stack (tests/docker-compose.yml). The key must match
+# the one baked into that compose file.
+APISIX_BASE_URL ?= http://localhost:9180/apisix/admin
+APISIX_ADMIN_KEY ?= test123456789
+APISIX_WAIT_ATTEMPTS ?= 30
 
 build:
 	go build -o terraform-provider-apisix
@@ -9,16 +15,7 @@ test:
 test-acceptance:
 	@echo "Starting APISIX cluster..."
 	docker compose -f tests/docker-compose.yml up -d
-	@echo "Waiting for APISIX to be ready..."
-	@for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 16 21 22 23 24 25 26 27 28 29 30; do \
-		if docker ps --format '{{.Names}}' | grep -q tests-apisix-1 && \
-		   curl -s -o /dev/null -w "%{http_code}" http://localhost:9180/apisix/admin/routes -H "X-API-KEY: test123456789" | grep -q "200"; then \
-			echo "✓ APISIX ready"; \
-			break; \
-		fi; \
-		echo "  Attempt $$i/30 - waiting..."; \
-		sleep 2; \
-	done
+	@$(MAKE) --no-print-directory wait-for-apisix
 	@echo ""
 	@echo "Running acceptance tests..."
 	@for test in tests/acceptance/*/test.sh; do \
@@ -41,16 +38,7 @@ test-acceptance-single:
 	fi
 	@echo "Starting APISIX cluster..."
 	docker compose -f tests/docker-compose.yml up -d
-	@echo "Waiting for APISIX to be ready..."
-	@for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 16 21 22 23 24 25 26 27 28 29 30; do \
-		if docker ps --format '{{.Names}}' | grep -q tests-apisix-1 && \
-		   curl -s -o /dev/null -w "%{http_code}" http://localhost:9180/apisix/admin/routes -H "X-API-KEY: test123456789" | grep -q "200"; then \
-			echo "✓ APISIX ready"; \
-			break; \
-		fi; \
-		echo "  Attempt $$i/30 - waiting..."; \
-		sleep 2; \
-	done
+	@$(MAKE) --no-print-directory wait-for-apisix
 	@echo ""
 	@echo "Running $(TEST) acceptance test..."
 	bash tests/acceptance/$(TEST)/test.sh
@@ -61,16 +49,26 @@ test-acceptance-single:
 
 test-env-up:
 	docker compose -f tests/docker-compose.yml up -d
+	@$(MAKE) --no-print-directory wait-for-apisix
+
+# Block until the admin API answers. Every target that needs a live stack
+# depends on this one rather than carrying its own copy of the loop: the copies
+# drifted before, and the one in test-env-up spent 60s polling a 401 because it
+# omitted the API key.
+wait-for-apisix:
 	@echo "Waiting for APISIX to be ready..."
-	@for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 16 21 22 23 24 25 26 27 28 29 30; do \
+	@for i in $$(seq 1 $(APISIX_WAIT_ATTEMPTS)); do \
 		if docker ps --format '{{.Names}}' | grep -q tests-apisix-1 && \
-		   curl -s -o /dev/null -w "%{http_code}" http://localhost:9180/apisix/admin/routes | grep -q "200"; then \
+		   [ "$$(curl -s -o /dev/null -w '%{http_code}' -H 'X-API-KEY: $(APISIX_ADMIN_KEY)' $(APISIX_BASE_URL)/routes)" = "200" ]; then \
 			echo "✓ APISIX ready"; \
-			break; \
+			exit 0; \
 		fi; \
-		echo "  Attempt $$i/30 - waiting..."; \
+		echo "  Attempt $$i/$(APISIX_WAIT_ATTEMPTS) - waiting..."; \
 		sleep 2; \
-	done
+	done; \
+	echo "✗ APISIX did not become ready after $(APISIX_WAIT_ATTEMPTS) attempts"; \
+	docker compose -f tests/docker-compose.yml logs --tail 30 apisix; \
+	exit 1
 
 test-env-down:
 	docker compose -f tests/docker-compose.yml down -v

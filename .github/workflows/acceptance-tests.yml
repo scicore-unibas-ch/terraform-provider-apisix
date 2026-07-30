@@ -91,6 +91,10 @@ jobs:
         working-directory: tests/acceptance/consumer_group
         run: ./test.sh
 
+      - name: Run consumer_plugins acceptance tests
+        working-directory: tests/acceptance/consumer_plugins
+        run: ./test.sh
+
       - name: Run plugin_config acceptance tests
         working-directory: tests/acceptance/plugin_config
         run: ./test.sh
