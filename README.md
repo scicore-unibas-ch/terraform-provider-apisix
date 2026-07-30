@@ -17,6 +17,7 @@ The provider is built on the [Terraform Plugin Framework](https://developer.hash
 | [`apisix_service`](docs/resources/service.md) | Reusable bundle of host/plugin/upstream config that routes can reference. |
 | [`apisix_consumer`](docs/resources/consumer.md) | Authenticated API client identity (key-auth, jwt-auth, hmac-auth, basic-auth). |
 | [`apisix_consumer_group`](docs/resources/consumer_group.md) | Group of consumers sharing plugin configuration. |
+| [`apisix_consumer_plugins`](docs/resources/consumer_plugins.md) | Plugins on a consumer owned by another system, without owning its credentials. |
 | [`apisix_plugin_config`](docs/resources/plugin_config.md) | Reusable bundle of plugins for routes. |
 | [`apisix_global_rule`](docs/resources/global_rule.md) | Plugins applied to every request through APISIX. |
 | [`apisix_plugin_metadata`](docs/resources/plugin_metadata.md) | Per-plugin global configuration (log formats, exporter endpoints, defaults). |
