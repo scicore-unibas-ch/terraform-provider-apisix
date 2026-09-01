@@ -9,7 +9,7 @@ description: |-
 
 Manages an APISIX [Global Rule](https://apisix.apache.org/docs/apisix/terminology/global-rule/). Plugins on a global rule apply to **every** request flowing through APISIX, regardless of route — typical use cases are global rate limiting, system-wide CORS policies, IP restrictions, and tracing.
 
-APISIX requires at least one plugin on a global rule.
+APISIX requires the `plugins` field on a global rule, but it may be empty (`plugins = {}`).
 
 ## Example Usage
 
@@ -49,7 +49,7 @@ resource "apisix_global_rule" "security" {
 ## Argument Reference
 
 - `id` — (Required, ForceNew) Unique identifier for the global rule. Changing this forces replacement.
-- `plugins` — (Required) Map of plugin name to JSON-encoded configuration. APISIX requires at least one plugin. JSON-equivalent values are suppressed by the provider.
+- `plugins` — (Required) Map of plugin name to JSON-encoded configuration. Required, but may be empty (`plugins = {}`): APISIX requires the field to be present, not to hold any plugins. JSON-equivalent values are suppressed by the provider.
 
 ## Import
 

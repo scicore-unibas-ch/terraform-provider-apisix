@@ -91,7 +91,7 @@ func (r *Resource) Schema(ctx context.Context, _ resource.SchemaRequest, resp *r
 			"plugins": schema.MapAttribute{
 				Required:    true,
 				ElementType: types.StringType,
-				Description: "Map of plugin name to JSON-encoded configuration. APISIX requires at least one plugin.",
+				Description: "Map of plugin name to JSON-encoded configuration. Required, but may be empty: APISIX requires the field to be present, not to hold any plugins.",
 				PlanModifiers: []planmodifier.Map{
 					jsonmap.SuppressEquivalent(),
 				},
@@ -111,7 +111,7 @@ type apiBody struct {
 	ID      string                     `json:"id"`
 	Name    *string                    `json:"name,omitempty"`
 	Desc    *string                    `json:"desc,omitempty"`
-	Plugins map[string]json.RawMessage `json:"plugins,omitempty"`
+	Plugins map[string]json.RawMessage `json:"plugins"` // no omitempty: APISIX requires the key, and an empty map is valid
 	Labels  map[string]string          `json:"labels,omitempty"`
 }
 

@@ -9,7 +9,7 @@ description: |-
 
 Manages an APISIX [Consumer Group](https://apisix.apache.org/docs/apisix/terminology/consumer-group/). Plugins attached to a consumer group apply to every consumer that references the group via `group_id`.
 
-APISIX requires at least one plugin on a consumer group.
+APISIX requires the `plugins` field on a consumer group, but it may be empty (`plugins = {}`).
 
 ## Example Usage
 
@@ -47,7 +47,7 @@ resource "apisix_consumer" "alice" {
 ## Argument Reference
 
 - `id` — (Required, ForceNew) Unique identifier for the consumer group. Used as the APISIX object key. Changing this forces replacement.
-- `plugins` — (Required) Map of plugin name to JSON-encoded plugin configuration. APISIX requires at least one plugin. JSON-equivalent values are suppressed by the provider so server-side normalization (key reordering, default injection) does not produce drift.
+- `plugins` — (Required) Map of plugin name to JSON-encoded plugin configuration. Required, but may be empty (`plugins = {}`): APISIX requires the field to be present, not to hold any plugins. JSON-equivalent values are suppressed by the provider so server-side normalization (key reordering, default injection) does not produce drift.
 - `name` — (Optional) Human-readable name.
 - `desc` — (Optional) Description.
 - `labels` — (Optional) Map of string key/value pairs.

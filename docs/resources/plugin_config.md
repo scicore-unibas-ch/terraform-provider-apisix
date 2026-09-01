@@ -9,7 +9,7 @@ description: |-
 
 Manages an APISIX [Plugin Config](https://apisix.apache.org/docs/apisix/terminology/plugin-config/) — a reusable, named bundle of plugin configurations. Routes reference a plugin config by its `id` via the `plugin_config_id` attribute, which avoids duplicating plugin definitions across many routes.
 
-APISIX requires at least one plugin on a plugin config.
+APISIX requires the `plugins` field on a plugin config, but it may be empty (`plugins = {}`).
 
 ## Example Usage
 
@@ -48,7 +48,7 @@ resource "apisix_route" "users" {
 ## Argument Reference
 
 - `id` — (Required, ForceNew) Unique identifier for the plugin config. Changing this forces replacement.
-- `plugins` — (Required) Map of plugin name to JSON-encoded configuration. APISIX requires at least one plugin. JSON-equivalent values are suppressed by the provider.
+- `plugins` — (Required) Map of plugin name to JSON-encoded configuration. Required, but may be empty (`plugins = {}`): APISIX requires the field to be present, not to hold any plugins. JSON-equivalent values are suppressed by the provider.
 - `desc` — (Optional) Description.
 - `labels` — (Optional) Map of string key/value pairs.
 

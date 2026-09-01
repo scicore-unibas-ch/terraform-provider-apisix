@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-09-01
+
+### Fixed
+
+- **`plugins = {}` is now accepted on `apisix_consumer_group`, `apisix_global_rule` and `apisix_plugin_config`.** Creating one of these with an empty plugins map failed with `HTTP 400: invalid configuration: property "plugins" is required`. The field is `Required` on all three, but `apiBody.Plugins` was tagged `json:"plugins,omitempty"`, and `omitempty` drops a zero-length map as well as a nil one — so the key never reached the Admin API at all.
+
+  APISIX requires the field to be *present*, not to hold anything: `schema_def.lua` lists `plugins` in `required`, and a `PUT` with `{"plugins":{}}` returns `201` on 3.14 through 3.18. The schema descriptions and resource docs said the opposite ("APISIX requires at least one plugin") and have been corrected.
+
+  The motivating case is a consumer group used purely for *attribution*. APISIX exposes group membership as `$consumer_group_id`, which is what per-group Prometheus labels and log lines key on, so a deployment that puts every quota on the consumer still needs the group objects and has nothing to put inside them. Until now such a group could not be created at all without inventing a filler plugin — and any filler silently overwrites the route's config for that same plugin name.
+
+  `apisix_route`, `apisix_service` and `apisix_consumer` keep `omitempty`: `plugins` is `Optional` there, and omitting the key is the correct wire form for "not managed here".
+
 ## [0.5.0] - 2026-07-30
 
 ### Added
