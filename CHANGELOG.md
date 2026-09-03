@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-09-03
+
+### Fixed
+
+- **An Optional string attribute set to `""` no longer diffs on every plan.** A resource whose configuration set, say, `desc = ""` reported `will be updated in-place` on every single plan, for ever, with no attribute rendered in the diff. Applying never settled it.
+
+  The Admin API cannot distinguish "field absent" from "field set to an empty string" — both come back as `""` — and the two halves of the conversion disagreed about what that means. The write path (`tfconv.StringPtr`) treats `""` as a value and sends it; the read path (`tfconv.NullableString`) collapses `""` to null. Terraform compares **config against state**, not what went over the wire, so for an Optional attribute:
+
+  ```
+  config    desc = ""     ->  plan ""    ->  state ""   (Create sets state from the plan)
+  next plan refresh Read  ->  state null ->  "" != null ->  permanent diff
+  ```
+
+  `decodeInto` now uses `tfconv.NullableStringPreserving`, which takes the prior state and keeps the representation the configuration chose: an explicit `""` stays `""`, a genuinely absent field stays null, and import (no prior state) still yields null. Applied to all 19 Optional string attributes that shared the pattern — `desc` and `name` on every resource, plus `route.uri`, `host`, `remote_addr`, `filter_func`, `script`, `upstream_id`, `service_id`, `plugin_config_id`, `service.script` and `consumer.group_id`.
+
+  `tfconv.StringPtr` is deliberately unchanged: the wire form stays "empty means empty", which keeps `omitted` and `empty` distinguishable in the request body as the resource conventions require. The fix is entirely on the decode side.
+
+  The motivating case is a module that writes `desc = var.description` where the variable is declared `optional(string, "")`. Every entry that does not set a description sends `""`, so an allowlist of 50 people produced 50 phantom updates on every plan — and a plan that always shows changes is how a reviewer stops reading plans.
+
+  Regression coverage: `TestAccConsumer_emptyDescIsStable` applies `desc = ""` and asserts an empty plan both directly after apply and after a further apply/refresh cycle; it fails against 0.5.1. `TestNullableStringPreserving` covers the helper, including the import case.
+
 ## [0.5.1] - 2026-09-01
 
 ### Fixed

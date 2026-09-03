@@ -258,8 +258,8 @@ func decodeInto(ctx context.Context, raw json.RawMessage, m *model) diag.Diagnos
 	}
 
 	m.ID = types.StringValue(body.Username)
-	m.GroupID = tfconv.NullableString(body.GroupID)
-	m.Desc = tfconv.NullableString(body.Desc)
+	m.GroupID = tfconv.NullableStringPreserving(body.GroupID, m.GroupID)
+	m.Desc = tfconv.NullableStringPreserving(body.Desc, m.Desc)
 
 	pVal, d := pluginsmap.Decode(ctx, body.Plugins, true)
 	diags.Append(d...)

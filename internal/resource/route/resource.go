@@ -523,16 +523,16 @@ func decodeInto(ctx context.Context, raw json.RawMessage, m *model) diag.Diagnos
 	}
 
 	m.ID = types.StringValue(body.ID)
-	m.Name = tfconv.NullableString(body.Name)
-	m.Desc = tfconv.NullableString(body.Desc)
-	m.URI = tfconv.NullableString(body.URI)
-	m.Host = tfconv.NullableString(body.Host)
-	m.RemoteAddr = tfconv.NullableString(body.RemoteAddr)
-	m.FilterFunc = tfconv.NullableString(body.FilterFunc)
-	m.Script = tfconv.NullableString(body.Script)
-	m.UpstreamID = tfconv.NullableString(body.UpstreamID)
-	m.ServiceID = tfconv.NullableString(body.ServiceID)
-	m.PluginConfigID = tfconv.NullableString(body.PluginConfigID)
+	m.Name = tfconv.NullableStringPreserving(body.Name, m.Name)
+	m.Desc = tfconv.NullableStringPreserving(body.Desc, m.Desc)
+	m.URI = tfconv.NullableStringPreserving(body.URI, m.URI)
+	m.Host = tfconv.NullableStringPreserving(body.Host, m.Host)
+	m.RemoteAddr = tfconv.NullableStringPreserving(body.RemoteAddr, m.RemoteAddr)
+	m.FilterFunc = tfconv.NullableStringPreserving(body.FilterFunc, m.FilterFunc)
+	m.Script = tfconv.NullableStringPreserving(body.Script, m.Script)
+	m.UpstreamID = tfconv.NullableStringPreserving(body.UpstreamID, m.UpstreamID)
+	m.ServiceID = tfconv.NullableStringPreserving(body.ServiceID, m.ServiceID)
+	m.PluginConfigID = tfconv.NullableStringPreserving(body.PluginConfigID, m.PluginConfigID)
 
 	// Optional+Computed attributes: backfill the schema defaults when APISIX
 	// omits the field so refreshed state stays plan-stable.

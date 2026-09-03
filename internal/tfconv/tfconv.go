@@ -10,11 +10,41 @@ import (
 
 // NullableString maps the wire convention "absent field decodes as empty
 // string" to a null Terraform value.
+//
+// Prefer NullableStringPreserving in a decode path that has the prior state:
+// this function alone cannot tell an absent field from one the practitioner
+// explicitly set to "", and collapsing the latter to null causes a permanent
+// diff. See NullableStringPreserving.
 func NullableString(s string) types.String {
 	if s == "" {
 		return types.StringNull()
 	}
 	return types.StringValue(s)
+}
+
+// NullableStringPreserving is NullableString, except that it keeps an empty
+// string the practitioner actually wrote.
+//
+// Why this exists. The Admin API does not distinguish "field absent" from
+// "field set to an empty string" — both decode as "". The write path
+// (StringPtr) treats "" as a real value and sends it; the read path collapses
+// "" to null. Those two disagree, and Terraform compares CONFIG against STATE,
+// not what went over the wire, so for an Optional attribute:
+//
+//	config     desc = ""      -> plan ""      -> state "" (set from the plan)
+//	next plan  refresh Read   -> state null   -> "" != null
+//
+// which reports the resource as "will be updated in-place" on every plan, for
+// ever, with no attribute rendered because the values are equal once
+// normalised. Passing the prior state lets the decode keep the representation
+// the configuration chose: "" stays "", genuinely absent stays null.
+//
+// prior is the value already in state (zero value, i.e. null, on import).
+func NullableStringPreserving(s string, prior types.String) types.String {
+	if s == "" && !prior.IsNull() && !prior.IsUnknown() && prior.ValueString() == "" {
+		return prior
+	}
+	return NullableString(s)
 }
 
 // StringOrDefault substitutes def when the API omitted the field. Used for
